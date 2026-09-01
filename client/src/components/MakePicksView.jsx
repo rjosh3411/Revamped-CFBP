@@ -118,7 +118,7 @@ export function MakePicksView() {
                   />
 
                   {/* Logo & Ranking */}
-                  <div className="relative my-2">
+                  <div className="relative mt-2 mb-1">
                     <img
                       src={team.logoUrl}
                       alt={team.name}
@@ -130,6 +130,11 @@ export function MakePicksView() {
                         #{team.ranking}
                       </span>
                     )}
+                  </div>
+
+                  {/* Current Real-World Record (Under Logo) */}
+                  <div className="mb-1.5 inline-flex items-center px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[10px] font-mono font-bold text-amber-300">
+                    <span>Record: {team.currentRecord || '0-0'}</span>
                   </div>
 
                   {/* Team Name */}

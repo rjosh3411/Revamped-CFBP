@@ -4,6 +4,7 @@ const { TEAMS_2026 } = require('../db/teamsData');
 const db = require('../db/database');
 const { optionalAuth } = require('../middleware/auth');
 const { calculateBettingLine } = require('../services/oddsService');
+const espnService = require('../services/espnService');
 
 // GET /api/teams
 router.get('/', optionalAuth, async (req, res) => {
@@ -15,6 +16,9 @@ router.get('/', optionalAuth, async (req, res) => {
       const confLower = conference.toLowerCase();
       teams = teams.filter(t => t.conference.toLowerCase().includes(confLower) || (confLower === 'ind' && t.conference.toLowerCase().includes('ind')));
     }
+
+    // Fetch live ESPN real-world standings/records map
+    const standingsMap = await espnService.getStandingsMap().catch(() => new Map());
 
     // Calculate user's projected record for each team if logged in
     let userPicksMap = new Map();
@@ -72,8 +76,16 @@ router.get('/', optionalAuth, async (req, res) => {
       }
 
       const totalScheduled = teamSchedules.length || 12;
+
+      // Real-world record from ESPN
+      const espnInfo = standingsMap.get(String(team.espnId)) || standingsMap.get(tName) || standingsMap.get(tId);
+      const currentRecord = espnInfo?.overall || '0-0';
+      const conferenceRecord = espnInfo?.conference || '0-0';
+
       return {
         ...team,
+        currentRecord,
+        conferenceRecord,
         totalGamesScheduled: totalScheduled,
         projectedRecord: {
           wins: projectedWins,
@@ -99,6 +111,12 @@ router.get('/:id/schedule', optionalAuth, async (req, res) => {
     if (!team) {
       return res.status(404).json({ error: 'Team not found' });
     }
+
+    // Pull real-world standings/record for this team
+    const standingsMap = await espnService.getStandingsMap().catch(() => new Map());
+    const espnInfo = standingsMap.get(String(team.espnId)) || standingsMap.get(team.name.toLowerCase()) || standingsMap.get(team.id.toLowerCase());
+    const currentRecord = espnInfo?.overall || '0-0';
+    const conferenceRecord = espnInfo?.conference || '0-0';
 
     // Pull from team_schedules table
     const schedules = await db.prepare(`
@@ -137,26 +155,30 @@ router.get('/:id/schedule', optionalAuth, async (req, res) => {
           (tAbbr && pickedName === tAbbr)
         );
 
-        userPrediction = isWin ? 'WIN' : 'LOSS';
+        userPrediction = {
+          gameId: s.game_id,
+          pickId: userPick.id,
+          predictedWinnerId: userPick.predicted_winner_id,
+          predictedWinnerName: userPick.predicted_winner_name,
+          confidenceLevel: userPick.confidence_level || null,
+          confidencePoints: userPick.confidence_points,
+          isWinForTeam: isWin,
+          isCorrect: userPick.is_correct,
+          pointsAwarded: userPick.points_awarded
+        };
       }
 
-      const gameDate = new Date(s.game_date);
-      const isPastDate = gameDate <= now;
-      const isFinal = s.status === 'STATUS_FINAL';
-      const isInProgress = s.status === 'STATUS_IN_PROGRESS';
-      const isLocked = isPastDate || isFinal || isInProgress;
+      // 1-hour before kickoff lockout calculation
+      const gameTime = new Date(s.game_date);
+      const isPastGame = gameTime < now;
+      const isLocked = (gameTime.getTime() - now.getTime()) <= (60 * 60 * 1000);
 
-      // Calculate or extract betting line
-      const homeTeam = s.is_home === 1 ? team.name : s.opponent_name;
-      const homeRank = s.is_home === 1 ? team.ranking : s.opponent_rank;
-      const awayTeam = s.is_home === 1 ? s.opponent_name : team.name;
-      const awayRank = s.is_home === 1 ? s.opponent_rank : team.ranking;
-
+      // Betting line
       const odds = calculateBettingLine({
-        homeTeamName: homeTeam,
-        homeRank,
-        awayTeamName: awayTeam,
-        awayRank,
+        homeTeamName: s.is_home ? team.name : s.opponent_name,
+        homeRank: s.is_home ? team.ranking : s.opponent_rank,
+        awayTeamName: s.is_home ? s.opponent_name : team.name,
+        awayRank: s.is_home ? s.opponent_rank : team.ranking,
         isHome: s.is_home === 1
       });
 
@@ -164,31 +186,30 @@ router.get('/:id/schedule', optionalAuth, async (req, res) => {
         gameId: s.game_id,
         week: s.week_number,
         date: s.game_date,
+        opponent: s.opponent_name,
+        opponentLogo: s.opponent_logo,
+        opponentRank: s.opponent_rank,
         isHome: s.is_home === 1,
-        opponent: {
-          name: s.opponent_name,
-          logo: s.opponent_logo || `https://a.espncdn.com/i/teamlogos/ncaa/500/7.png`,
-          rank: s.opponent_rank
-        },
         venue: s.venue_name,
         broadcast: s.broadcast,
         status: s.status,
         statusDetail: s.status_detail,
-        isFinal,
-        isInProgress,
+        isFinal: s.status === 'STATUS_FINAL',
+        teamScore: s.team_score,
+        opponentScore: s.opponent_score,
         isLocked,
-        bettingLine: odds,
-        score: {
-          teamScore: s.team_score,
-          opponentScore: s.opponent_score
-        },
-        userPick,
+        isPastGame,
+        odds,
         userPrediction
       };
     });
 
     return res.json({
-      team,
+      team: {
+        ...team,
+        currentRecord,
+        conferenceRecord
+      },
       schedule: scheduleList,
       totalGames: scheduleList.length
     });

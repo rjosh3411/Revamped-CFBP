@@ -387,6 +387,56 @@ class EspnService {
     }
   }
 
+  async getStandingsMap() {
+    const cacheKey = 'cfb_standings_map';
+    const cached = this.memoryCache.get(cacheKey);
+
+    const dayOfWeek = new Date().getDay();
+    const cacheDuration = dayOfWeek === 1 ? (10 * 60 * 1000) : (30 * 60 * 1000);
+
+    if (cached && (Date.now() - cached.timestamp < cacheDuration)) {
+      return cached.data;
+    }
+
+    const recordsMap = new Map();
+
+    try {
+      const url = 'https://site.api.espn.com/apis/v2/sports/football/college-football/standings';
+      const data = await this.fetchJson(url);
+
+      if (data && data.children) {
+        for (const group of data.children) {
+          if (group.standings && group.standings.entries) {
+            for (const entry of group.standings.entries) {
+              const espnId = String(entry.team?.id || '');
+              const teamName = (entry.team?.displayName || entry.team?.name || '').toLowerCase();
+              const overallStat = entry.stats?.find(s => s.name === 'overall' || s.type === 'total');
+              const overallRecord = overallStat?.displayValue || '0-0';
+
+              const confStat = entry.stats?.find(s => s.name === 'vs. Conf.' || s.type === 'vsconf');
+              const confRecord = confStat?.displayValue || '0-0';
+
+              const recordInfo = {
+                overall: overallRecord,
+                conference: confRecord,
+                displayName: entry.team?.displayName || ''
+              };
+
+              if (espnId) recordsMap.set(espnId, recordInfo);
+              if (teamName) recordsMap.set(teamName, recordInfo);
+            }
+          }
+        }
+      }
+
+      this.memoryCache.set(cacheKey, { timestamp: Date.now(), data: recordsMap });
+      return recordsMap;
+    } catch (e) {
+      console.warn('Standings fetch warning:', e.message);
+      return recordsMap;
+    }
+  }
+
   normalizeRankings(data) {
     if (!data.rankings || !Array.isArray(data.rankings)) return [];
 

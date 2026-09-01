@@ -163,9 +163,14 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
                   {team.name} {team.nickname}
                 </h1>
               </div>
-              <p className="text-xs text-[#dcd8c8] font-medium">
-                {team.conference} • 2026 Official Schedule & Betting Lines
-              </p>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                <p className="text-xs text-[#dcd8c8] font-medium">
+                  {team.conference} • 2026 Schedule & Lines
+                </p>
+                <span className="text-[11px] font-mono font-black text-amber-300 bg-black/60 px-2.5 py-0.5 rounded-full border border-white/10 shadow-sm">
+                  Record: {team.currentRecord || '0-0'}
+                </span>
+              </div>
             </div>
           </div>
 
