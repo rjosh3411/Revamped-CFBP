@@ -157,6 +157,29 @@ function initSchema() {
       PRIMARY KEY (poll_name, rank)
     );
 
+    -- Team Schedules Table (Official verified 2026 schedules)
+    CREATE TABLE IF NOT EXISTS team_schedules (
+      id TEXT PRIMARY KEY,
+      team_id TEXT NOT NULL,
+      game_id TEXT NOT NULL,
+      season_year INTEGER NOT NULL DEFAULT 2026,
+      week_number INTEGER NOT NULL,
+      game_date DATETIME NOT NULL,
+      is_home INTEGER NOT NULL,
+      opponent_name TEXT NOT NULL,
+      opponent_logo TEXT,
+      opponent_rank INTEGER,
+      venue_name TEXT,
+      broadcast TEXT,
+      status TEXT DEFAULT 'STATUS_SCHEDULED',
+      status_detail TEXT DEFAULT 'Scheduled',
+      team_score INTEGER DEFAULT 0,
+      opponent_score INTEGER DEFAULT 0,
+      raw_json TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(team_id, week_number)
+    );
+
     -- Party Chat & Trash Talk Table
     CREATE TABLE IF NOT EXISTS party_messages (
       id TEXT PRIMARY KEY,
@@ -169,6 +192,7 @@ function initSchema() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE INDEX IF NOT EXISTS idx_team_sched_team ON team_schedules(team_id);
     CREATE INDEX IF NOT EXISTS idx_picks_user_week ON picks(user_id, season_year, week_number);
     CREATE INDEX IF NOT EXISTS idx_picks_game ON picks(game_id);
     CREATE INDEX IF NOT EXISTS idx_party_members_user ON party_members(user_id);
