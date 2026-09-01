@@ -24,18 +24,16 @@ router.get('/', optionalAuth, async (req, res) => {
 
     let games = scoreboard.games || [];
 
-    // Filter by conference if not handled by endpoint group
     if (conference === 'TOP25') {
       games = games.filter(g => (g.homeTeam.rank !== null && g.homeTeam.rank <= 25) || (g.awayTeam.rank !== null && g.awayTeam.rank <= 25));
     }
 
-    // Attach current user's picks if logged in
     let userPicksMap = {};
     if (req.user) {
-      const picks = db.prepare(`
+      const picks = await db.prepare(`
         SELECT * FROM picks 
-        WHERE user_id = ? AND season_year = ? AND week_number = ?
-      `).all(req.user.id, year, week);
+        WHERE user_id = ? AND (season_year = ? OR season_year = ?) AND week_number = ?
+      `).all(req.user.id, year, String(year), week);
 
       for (const p of picks) {
         userPicksMap[p.game_id] = p;
@@ -58,26 +56,21 @@ router.get('/', optionalAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('Games fetch error:', err);
-    return res.status(500).json({ error: 'Failed to retrieve college football games' });
+    return res.status(500).json({ error: 'Failed to fetch college football games' });
   }
 });
 
-// POST /api/games/sync
-router.post('/sync', async (req, res) => {
+// POST /api/games/grade (Trigger grading for completed games)
+router.post('/grade', async (req, res) => {
   try {
     const year = parseInt(req.body.year || 2026, 10);
     const week = parseInt(req.body.week || 1, 10);
 
-    // Refresh ESPN games and grade picks
-    const gradeResult = await gradingService.gradeWeekPicks(year, week);
-
-    return res.json({
-      message: 'ESPN synchronization and pick grading completed',
-      result: gradeResult
-    });
+    const result = await gradingService.gradeCompletedGames(year, week);
+    return res.json({ message: 'Grading complete', ...result });
   } catch (err) {
-    console.error('Sync error:', err);
-    return res.status(500).json({ error: 'Failed to sync with ESPN' });
+    console.error('Grading trigger error:', err);
+    return res.status(500).json({ error: 'Failed to grade predictions' });
   }
 });
 

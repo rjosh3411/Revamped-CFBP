@@ -5,17 +5,17 @@ const db = require('../db/database');
 const { authenticateToken } = require('../middleware/auth');
 
 // GET /api/picks/my-picks
-router.get('/my-picks', authenticateToken, (req, res) => {
+router.get('/my-picks', authenticateToken, async (req, res) => {
   try {
     const year = parseInt(req.query.year || 2026, 10);
     const week = parseInt(req.query.week || 1, 10);
 
-    const picks = db.prepare(`
+    const picks = await db.prepare(`
       SELECT p.*, g.status as game_status, g.home_team_name, g.away_team_name, g.home_team_score, g.away_team_score, g.winner_team_id
       FROM picks p
       LEFT JOIN games_cache g ON p.game_id = g.game_id
-      WHERE p.user_id = ? AND p.season_year = ? AND p.week_number = ?
-    `).all(req.user.id, year, week);
+      WHERE p.user_id = ? AND (p.season_year = ? OR p.season_year = ?) AND p.week_number = ?
+    `).all(req.user.id, year, String(year), week);
 
     return res.json({ picks });
   } catch (err) {
@@ -25,7 +25,7 @@ router.get('/my-picks', authenticateToken, (req, res) => {
 });
 
 // POST /api/picks
-router.post('/', authenticateToken, (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
     const { gameId, seasonYear = 2026, weekNumber = 1, predictedWinnerId, predictedWinnerName, confidencePoints = 1, confidenceLevel = null } = req.body;
 
@@ -33,12 +33,11 @@ router.post('/', authenticateToken, (req, res) => {
       return res.status(400).json({ error: 'gameId, predictedWinnerId, and predictedWinnerName are required' });
     }
 
-    // Validate confidenceLevel if provided
     const safeConfidenceLevel = [1, 2, 3].includes(confidenceLevel) ? confidenceLevel : null;
 
-    // Check if game has already started or is locked
-    const game = db.prepare('SELECT * FROM games_cache WHERE game_id = ?').get(gameId);
-    const teamSched = db.prepare('SELECT * FROM team_schedules WHERE game_id = ?').get(gameId);
+    // Check lockout
+    const game = await db.prepare('SELECT * FROM games_cache WHERE game_id = ?').get(gameId);
+    const teamSched = await db.prepare('SELECT * FROM team_schedules WHERE game_id = ?').get(gameId);
 
     const gameDateStr = game?.game_date || teamSched?.game_date;
     const gameStatus = game?.status || teamSched?.status;
@@ -80,7 +79,7 @@ router.post('/', authenticateToken, (req, res) => {
         updated_at = CURRENT_TIMESTAMP
     `);
 
-    upsertStmt.run(
+    await upsertStmt.run(
       pickId,
       req.user.id,
       gameId,
@@ -94,14 +93,18 @@ router.post('/', authenticateToken, (req, res) => {
       pointsAwarded
     );
 
-    const savedPick = db.prepare('SELECT * FROM picks WHERE user_id = ? AND game_id = ?').get(req.user.id, gameId);
+    const savedPick = await db.prepare('SELECT * FROM picks WHERE user_id = ? AND game_id = ?').get(req.user.id, gameId);
 
     // Update user stats
-    const totalPicks = db.prepare('SELECT COUNT(*) as count FROM picks WHERE user_id = ?').get(req.user.id).count;
-    const correctPicks = db.prepare('SELECT COUNT(*) as count FROM picks WHERE user_id = ? AND is_correct = 1').get(req.user.id).count;
-    const totalPoints = db.prepare('SELECT SUM(points_awarded) as sum FROM picks WHERE user_id = ?').get(req.user.id).sum || 0;
+    const totalPicksRes = await db.prepare('SELECT COUNT(*) as count FROM picks WHERE user_id = ?').get(req.user.id);
+    const correctPicksRes = await db.prepare('SELECT COUNT(*) as count FROM picks WHERE user_id = ? AND is_correct = 1').get(req.user.id);
+    const totalPointsRes = await db.prepare('SELECT SUM(points_awarded) as sum FROM picks WHERE user_id = ?').get(req.user.id);
 
-    db.prepare('UPDATE users SET total_picks = ?, correct_picks = ?, total_points = ? WHERE id = ?').run(
+    const totalPicks = totalPicksRes?.count || 0;
+    const correctPicks = correctPicksRes?.count || 0;
+    const totalPoints = totalPointsRes?.sum || 0;
+
+    await db.prepare('UPDATE users SET total_picks = ?, correct_picks = ?, total_points = ? WHERE id = ?').run(
       totalPicks,
       correctPicks,
       totalPoints,
@@ -116,7 +119,7 @@ router.post('/', authenticateToken, (req, res) => {
 });
 
 // POST /api/picks/bulk
-router.post('/bulk', authenticateToken, (req, res) => {
+router.post('/bulk', authenticateToken, async (req, res) => {
   try {
     const { picks = [] } = req.body;
     if (!Array.isArray(picks) || picks.length === 0) {
@@ -124,45 +127,38 @@ router.post('/bulk', authenticateToken, (req, res) => {
     }
 
     const now = new Date();
-    const upsertStmt = db.prepare(`
-      INSERT INTO picks (
-        id, user_id, game_id, season_year, week_number, predicted_winner_id, predicted_winner_name,
-        confidence_points, is_correct, points_awarded, updated_at
-      ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
-      )
-      ON CONFLICT(user_id, game_id) DO UPDATE SET
-        predicted_winner_id = excluded.predicted_winner_id,
-        predicted_winner_name = excluded.predicted_winner_name,
-        confidence_points = excluded.confidence_points,
-        updated_at = CURRENT_TIMESTAMP
-    `);
-
-    const transaction = db.transaction((pickList) => {
-      for (const p of pickList) {
-        // Check lockout
-        const game = db.prepare('SELECT * FROM games_cache WHERE game_id = ?').get(p.gameId);
-        if (game?.game_date && new Date(game.game_date) <= now) {
-          continue; // skip locked games
-        }
-
-        const pickId = 'pk_' + crypto.randomBytes(8).toString('hex');
-        upsertStmt.run(
-          pickId,
-          req.user.id,
-          p.gameId,
-          p.seasonYear || 2026,
-          p.weekNumber || 1,
-          p.predictedWinnerId,
-          p.predictedWinnerName,
-          p.confidencePoints || 1,
-          null,
-          0
-        );
+    for (const p of picks) {
+      const game = await db.prepare('SELECT * FROM games_cache WHERE game_id = ?').get(p.gameId);
+      if (game?.game_date && new Date(game.game_date) <= now) {
+        continue;
       }
-    });
 
-    transaction(picks);
+      const pickId = 'pk_' + crypto.randomBytes(8).toString('hex');
+      await db.prepare(`
+        INSERT INTO picks (
+          id, user_id, game_id, season_year, week_number, predicted_winner_id, predicted_winner_name,
+          confidence_points, is_correct, points_awarded, updated_at
+        ) VALUES (
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
+        )
+        ON CONFLICT(user_id, game_id) DO UPDATE SET
+          predicted_winner_id = excluded.predicted_winner_id,
+          predicted_winner_name = excluded.predicted_winner_name,
+          confidence_points = excluded.confidence_points,
+          updated_at = CURRENT_TIMESTAMP
+      `).run(
+        pickId,
+        req.user.id,
+        p.gameId,
+        parseInt(p.seasonYear, 10) || 2026,
+        parseInt(p.weekNumber, 10) || 1,
+        p.predictedWinnerId,
+        p.predictedWinnerName,
+        p.confidencePoints || 1,
+        null,
+        0
+      );
+    }
 
     return res.json({ message: `Processed picks` });
   } catch (err) {

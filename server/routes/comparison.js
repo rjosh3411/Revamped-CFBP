@@ -10,16 +10,16 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
     const partyId = req.params.partyId;
     const year = parseInt(req.query.year || 2026, 10);
     const week = parseInt(req.query.week || 1, 10);
-    const buddyId = req.query.buddyId; // optional specific buddy
+    const buddyId = req.query.buddyId;
 
     // Check party membership
-    const isMember = db.prepare('SELECT id FROM party_members WHERE party_id = ? AND user_id = ?').get(partyId, req.user.id);
+    const isMember = await db.prepare('SELECT id FROM party_members WHERE party_id = ? AND user_id = ?').get(partyId, req.user.id);
     if (!isMember) {
       return res.status(403).json({ error: 'You are not a member of this party' });
     }
 
-    // Get all party members (excluding current user or including all)
-    const members = db.prepare(`
+    // Get all party members
+    const members = await db.prepare(`
       SELECT u.id, u.username, u.display_name, u.favorite_team, u.avatar_url,
              u.total_points, u.correct_picks, u.total_picks, u.current_streak,
              pm.role,
@@ -37,7 +37,6 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
 
     const buddies = members.filter(m => m.id !== req.user.id);
 
-    // Select primary buddy to compare with
     let selectedBuddy = null;
     if (buddyId) {
       selectedBuddy = buddies.find(b => b.id === buddyId) || null;
@@ -51,10 +50,10 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
     const games = scoreboard.games || [];
 
     // Fetch current user picks
-    const myPicks = db.prepare(`
+    const myPicks = await db.prepare(`
       SELECT * FROM picks 
-      WHERE user_id = ? AND season_year = ? AND week_number = ?
-    `).all(req.user.id, year, week);
+      WHERE user_id = ? AND (season_year = ? OR season_year = ?) AND week_number = ?
+    `).all(req.user.id, year, String(year), week);
 
     const myPicksMap = new Map();
     myPicks.forEach(p => myPicksMap.set(p.game_id, p));
@@ -62,21 +61,21 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
     // Fetch buddy picks if buddy exists
     const buddyPicksMap = new Map();
     if (selectedBuddy) {
-      const buddyPicks = db.prepare(`
+      const buddyPicks = await db.prepare(`
         SELECT * FROM picks 
-        WHERE user_id = ? AND season_year = ? AND week_number = ?
-      `).all(selectedBuddy.id, year, week);
+        WHERE user_id = ? AND (season_year = ? OR season_year = ?) AND week_number = ?
+      `).all(selectedBuddy.id, year, String(year), week);
       buddyPicks.forEach(p => buddyPicksMap.set(p.game_id, p));
     }
 
     // Fetch all party members' picks for party consensus
-    const allPartyPicks = db.prepare(`
+    const allPartyPicks = await db.prepare(`
       SELECT p.*, u.display_name, u.avatar_url
       FROM picks p
       JOIN party_members pm ON p.user_id = pm.user_id
       JOIN users u ON p.user_id = u.id
-      WHERE pm.party_id = ? AND p.season_year = ? AND p.week_number = ?
-    `).all(partyId, year, week);
+      WHERE pm.party_id = ? AND (p.season_year = ? OR p.season_year = ?) AND p.week_number = ?
+    `).all(partyId, year, String(year), week);
 
     const partyPicksByGame = new Map();
     allPartyPicks.forEach(p => {
@@ -97,8 +96,8 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
       const buddyPick = selectedBuddy ? (buddyPicksMap.get(g.id) || null) : null;
       const allPicksForGame = partyPicksByGame.get(g.id) || [];
 
-      let comparisonStatus = 'UNPICKED'; // 'AGREED', 'DISAGREED', 'MY_ONLY', 'BUDDY_ONLY', 'UNPICKED'
-      let headToHeadResult = 'PENDING'; // 'BOTH_CORRECT', 'BOTH_INCORRECT', 'YOU_WON', 'BUDDY_WON', 'PENDING'
+      let comparisonStatus = 'UNPICKED';
+      let headToHeadResult = 'PENDING';
 
       if (myPick && buddyPick) {
         totalCompared++;
@@ -132,7 +131,6 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
         buddyWeeklyPoints += buddyPick.points_awarded;
       }
 
-      // Party consensus calculation (percentage picking Home vs Away)
       const homePicksCount = allPicksForGame.filter(p => p.predicted_winner_id === g.homeTeam.id).length;
       const awayPicksCount = allPicksForGame.filter(p => p.predicted_winner_id === g.awayTeam.id).length;
       const totalPartyPicks = homePicksCount + awayPicksCount;

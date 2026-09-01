@@ -19,18 +19,23 @@ function authenticateToken(req, res, next) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+  jwt.verify(token, JWT_SECRET, async (err, decoded) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid or expired token' });
     }
 
-    const user = db.prepare('SELECT id, email, username, display_name, favorite_team, avatar_url, jersey_number, total_points, correct_picks, total_picks, current_streak, best_streak FROM users WHERE id = ?').get(decoded.id);
-    if (!user) {
-      return res.status(404).json({ error: 'User no longer exists' });
-    }
+    try {
+      const user = await db.prepare('SELECT id, email, username, display_name, favorite_team, avatar_url, jersey_number, total_points, correct_picks, total_picks, current_streak, best_streak FROM users WHERE id = ?').get(decoded.id);
+      if (!user) {
+        return res.status(404).json({ error: 'User no longer exists' });
+      }
 
-    req.user = user;
-    next();
+      req.user = user;
+      next();
+    } catch (dbErr) {
+      console.error('Auth verification error:', dbErr);
+      return res.status(500).json({ error: 'Authentication database lookup failed' });
+    }
   });
 }
 
@@ -43,10 +48,14 @@ function optionalAuth(req, res, next) {
     return next();
   }
 
-  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+  jwt.verify(token, JWT_SECRET, async (err, decoded) => {
     if (!err && decoded) {
-      const user = db.prepare('SELECT id, email, username, display_name, favorite_team, avatar_url, jersey_number, total_points, correct_picks, total_picks, current_streak, best_streak FROM users WHERE id = ?').get(decoded.id);
-      req.user = user || null;
+      try {
+        const user = await db.prepare('SELECT id, email, username, display_name, favorite_team, avatar_url, jersey_number, total_points, correct_picks, total_picks, current_streak, best_streak FROM users WHERE id = ?').get(decoded.id);
+        req.user = user || null;
+      } catch (e) {
+        req.user = null;
+      }
     }
     next();
   });

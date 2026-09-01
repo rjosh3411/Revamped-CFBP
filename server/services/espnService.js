@@ -124,8 +124,8 @@ class EspnService {
       this.memoryCache.set(cacheKey, { timestamp: Date.now(), data: result });
       return result;
     } catch (err) {
-      console.warn(`[ESPN Service] Network fetch failed (${err.message}). Falling back to SQLite cache.`);
-      let dbGames = this.getGamesFromDb(year, week);
+      console.warn(`[ESPN Service] Network fetch failed (${err.message}). Falling back to database cache.`);
+      let dbGames = await this.getGamesFromDb(year, week);
       if (confKey !== 'ALL' && confKey !== 'TOP25' && CONFERENCE_TEAMS[confKey]) {
         dbGames = this.filterByConference(dbGames, confKey);
       }
@@ -140,7 +140,7 @@ class EspnService {
         };
       }
       const fallbackGames = this.generateFallbackGames(year, week);
-      this.saveGamesToDb(fallbackGames, year, week);
+      await this.saveGamesToDb(fallbackGames, year, week);
       let filteredFallback = fallbackGames;
       if (confKey !== 'ALL' && confKey !== 'TOP25') {
         filteredFallback = this.filterByConference(fallbackGames, confKey);
@@ -252,68 +252,54 @@ class EspnService {
     });
   }
 
-  saveGamesToDb(games, year, week) {
-    const upsertStmt = db.prepare(`
-      INSERT INTO games_cache (
-        game_id, season_year, week_number, game_date, status, status_detail,
-        home_team_id, home_team_name, home_team_rank, home_team_logo, home_team_score,
-        away_team_id, away_team_name, away_team_rank, away_team_logo, away_team_score,
-        winner_team_id, conference_competition, venue_name, broadcast, raw_json, last_synced
-      ) VALUES (
-        @id, @seasonYear, @weekNumber, @date, @status, @statusDetail,
-        @homeId, @homeName, @homeRank, @homeLogo, @homeScore,
-        @awayId, @awayName, @awayRank, @awayLogo, @awayScore,
-        @winnerId, @confComp, @venue, @broadcast, @rawJson, CURRENT_TIMESTAMP
-      )
-      ON CONFLICT(game_id) DO UPDATE SET
-        status = excluded.status,
-        status_detail = excluded.status_detail,
-        home_team_score = excluded.home_team_score,
-        away_team_score = excluded.away_team_score,
-        home_team_rank = excluded.home_team_rank,
-        away_team_rank = excluded.away_team_rank,
-        winner_team_id = excluded.winner_team_id,
-        raw_json = excluded.raw_json,
-        last_synced = CURRENT_TIMESTAMP
-    `);
+  async saveGamesToDb(games, year, week) {
+    const statements = games.map(g => ({
+      sql: `
+        INSERT INTO games_cache (
+          game_id, season_year, week_number, game_date, status, status_detail,
+          home_team_id, home_team_name, home_team_rank, home_team_logo, home_team_score,
+          away_team_id, away_team_name, away_team_rank, away_team_logo, away_team_score,
+          winner_team_id, conference_competition, venue_name, broadcast, raw_json, last_synced
+        ) VALUES (
+          ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
+        )
+        ON CONFLICT(game_id) DO UPDATE SET
+          status = excluded.status,
+          status_detail = excluded.status_detail,
+          home_team_score = excluded.home_team_score,
+          away_team_score = excluded.away_team_score,
+          home_team_rank = excluded.home_team_rank,
+          away_team_rank = excluded.away_team_rank,
+          winner_team_id = excluded.winner_team_id,
+          raw_json = excluded.raw_json,
+          last_synced = CURRENT_TIMESTAMP
+      `,
+      args: [
+        g.id, year, week, g.date, g.status, g.statusDetail,
+        g.homeTeam.id, g.homeTeam.name, g.homeTeam.rank, g.homeTeam.logo, g.homeTeam.score,
+        g.awayTeam.id, g.awayTeam.name, g.awayTeam.rank, g.awayTeam.logo, g.awayTeam.score,
+        g.winnerId, g.conferenceCompetition ? 1 : 0, g.venue, g.broadcast, JSON.stringify(g)
+      ]
+    }));
 
-    const transaction = db.transaction((gameList) => {
-      for (const g of gameList) {
-        upsertStmt.run({
-          id: g.id,
-          seasonYear: year,
-          weekNumber: week,
-          date: g.date,
-          status: g.status,
-          statusDetail: g.statusDetail,
-          homeId: g.homeTeam.id,
-          homeName: g.homeTeam.name,
-          homeRank: g.homeTeam.rank,
-          homeLogo: g.homeTeam.logo,
-          homeScore: g.homeTeam.score,
-          awayId: g.awayTeam.id,
-          awayName: g.awayTeam.name,
-          awayRank: g.awayTeam.rank,
-          awayLogo: g.awayTeam.logo,
-          awayScore: g.awayTeam.score,
-          winnerId: g.winnerId,
-          confComp: g.conferenceCompetition ? 1 : 0,
-          venue: g.venue,
-          broadcast: g.broadcast,
-          rawJson: JSON.stringify(g)
-        });
+    try {
+      if (statements.length > 0) {
+        await db.batch(statements);
       }
-    });
-
-    transaction(games);
+    } catch (e) {
+      console.warn('Could not batch save games:', e.message);
+    }
   }
 
-  getGamesFromDb(year, week) {
-    const rows = db.prepare(`
+  async getGamesFromDb(year, week) {
+    const rows = await db.prepare(`
       SELECT * FROM games_cache 
-      WHERE season_year = ? AND week_number = ?
+      WHERE (season_year = ? OR season_year = ?) AND week_number = ?
       ORDER BY game_date ASC
-    `).all(year, week);
+    `).all(year, String(year), week);
 
     return rows.map(r => {
       if (r.raw_json) {
@@ -365,18 +351,18 @@ class EspnService {
       const data = await this.fetchJson(url);
       const normalizedRankings = this.normalizeRankings(data);
 
-      this.saveRankingsToDb(normalizedRankings);
+      await this.saveRankingsToDb(normalizedRankings);
 
       this.memoryCache.set(cacheKey, { timestamp: Date.now(), data: normalizedRankings });
       return normalizedRankings;
     } catch (err) {
       console.warn(`[ESPN Rankings] Fetch failed (${err.message}). Using DB rankings.`);
-      const dbRankings = this.getRankingsFromDb();
+      const dbRankings = await this.getRankingsFromDb();
       if (dbRankings && dbRankings.length > 0) {
         return dbRankings;
       }
       const fallback = this.generateFallbackRankings();
-      this.saveRankingsToDb(fallback);
+      await this.saveRankingsToDb(fallback);
       return fallback;
     }
   }
@@ -424,40 +410,41 @@ class EspnService {
     }));
   }
 
-  saveRankingsToDb(polls) {
-    const insertStmt = db.prepare(`
-      INSERT OR REPLACE INTO rankings_cache (
-        poll_name, rank, team_id, team_name, team_nickname, logo_url, record, points, previous_rank, rank_change, headline
-      ) VALUES (
-        @pollName, @rank, @teamId, @teamName, @teamNickname, @logoUrl, @record, @points, @prevRank, @rankChange, @headline
-      )
-    `);
-
-    const transaction = db.transaction((pollList) => {
-      for (const p of pollList) {
-        for (const r of p.ranks || []) {
-          insertStmt.run({
-            pollName: p.name,
-            rank: r.rank,
-            teamId: r.team?.id || '',
-            teamName: r.team?.displayName || r.team?.name || '',
-            teamNickname: r.team?.nickname || '',
-            logoUrl: r.team?.logo || '',
-            record: r.record || '0-0',
-            points: r.points || 0,
-            prevRank: r.previousRank || r.rank,
-            rankChange: r.rankChange || '0',
-            headline: p.headline || ''
-          });
-        }
+  async saveRankingsToDb(polls) {
+    const statements = [];
+    for (const p of polls) {
+      for (const r of p.ranks || []) {
+        statements.push({
+          sql: `INSERT OR REPLACE INTO rankings_cache (
+            poll_name, rank, team_id, team_name, team_nickname, logo_url, record, points, previous_rank, rank_change, headline
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          args: [
+            p.name,
+            r.rank,
+            r.team?.id || '',
+            r.team?.displayName || r.team?.name || '',
+            r.team?.nickname || '',
+            r.team?.logo || '',
+            r.record || '0-0',
+            r.points || 0,
+            r.previousRank || r.rank,
+            r.rankChange || '0',
+            p.headline || ''
+          ]
+        });
       }
-    });
-
-    transaction(polls);
+    }
+    try {
+      if (statements.length > 0) {
+        await db.batch(statements);
+      }
+    } catch (e) {
+      console.warn('Could not save rankings to db:', e.message);
+    }
   }
 
-  getRankingsFromDb() {
-    const rows = db.prepare(`SELECT * FROM rankings_cache ORDER BY poll_name, rank ASC`).all();
+  async getRankingsFromDb() {
+    const rows = await db.prepare(`SELECT * FROM rankings_cache ORDER BY poll_name, rank ASC`).all();
     if (rows.length === 0) return null;
 
     const pollsMap = {};

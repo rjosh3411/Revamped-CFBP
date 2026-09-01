@@ -3,26 +3,6 @@ const router = express.Router();
 const db = require('../db/database');
 const { optionalAuth, authenticateToken } = require('../middleware/auth');
 
-// Add awards table if not exists
-db.exec(`
-  CREATE TABLE IF NOT EXISTS awards_picks (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    season_year INTEGER NOT NULL,
-    heisman_winner_id TEXT,
-    heisman_winner_name TEXT,
-    heisman_winner_school TEXT,
-    heisman_winner_logo TEXT,
-    cfp_champion_id TEXT,
-    cfp_champion_name TEXT,
-    cfp_runner_up_id TEXT,
-    cfp_runner_up_name TEXT,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, season_year),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-  );
-`);
-
 const HEISMAN_CANDIDATES = [
   { id: 'arch_manning', name: 'Arch Manning', position: 'QB', school: 'Texas', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/251.png' },
   { id: 'jeremiah_smith', name: 'Jeremiah Smith', position: 'WR', school: 'Ohio State', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/194.png' },
@@ -35,13 +15,13 @@ const HEISMAN_CANDIDATES = [
 ];
 
 // GET /api/heisman
-router.get('/', optionalAuth, (req, res) => {
+router.get('/', optionalAuth, async (req, res) => {
   try {
     const year = parseInt(req.query.year || 2026, 10);
     let myPick = null;
 
     if (req.user) {
-      myPick = db.prepare('SELECT * FROM awards_picks WHERE user_id = ? AND season_year = ?').get(req.user.id, year) || null;
+      myPick = await db.prepare('SELECT * FROM awards_picks WHERE user_id = ? AND season_year = ?').get(req.user.id, year) || null;
     }
 
     return res.json({
@@ -55,14 +35,14 @@ router.get('/', optionalAuth, (req, res) => {
 });
 
 // POST /api/heisman
-router.post('/', authenticateToken, (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
     const { seasonYear = 2026, heismanWinnerId, cfpChampionName } = req.body;
     const candidate = HEISMAN_CANDIDATES.find(c => c.id === heismanWinnerId);
 
     const pickId = 'awd_' + req.user.id + '_' + seasonYear;
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO awards_picks (
         id, user_id, season_year, heisman_winner_id, heisman_winner_name,
         heisman_winner_school, heisman_winner_logo, cfp_champion_name, updated_at
@@ -79,7 +59,7 @@ router.post('/', authenticateToken, (req, res) => {
     `).run(
       pickId,
       req.user.id,
-      seasonYear,
+      parseInt(seasonYear, 10) || 2026,
       candidate ? candidate.id : heismanWinnerId,
       candidate ? candidate.name : '',
       candidate ? candidate.school : '',
@@ -87,7 +67,7 @@ router.post('/', authenticateToken, (req, res) => {
       cfpChampionName || ''
     );
 
-    const updated = db.prepare('SELECT * FROM awards_picks WHERE user_id = ? AND season_year = ?').get(req.user.id, seasonYear);
+    const updated = await db.prepare('SELECT * FROM awards_picks WHERE user_id = ? AND season_year = ?').get(req.user.id, parseInt(seasonYear, 10) || 2026);
     return res.json({ message: 'Award predictions saved', pick: updated });
   } catch (err) {
     console.error('Save awards pick error:', err);

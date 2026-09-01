@@ -2,11 +2,7 @@ const db = require('../db/database');
 const espnService = require('./espnService');
 
 class GradingService {
-  /**
-   * Grade picks for a specific week or all completed games
-   */
   async gradeWeekPicks(year = 2026, week = 1) {
-    // 1. Fetch latest games from ESPN / DB
     const scoreboard = await espnService.getScoreboard({ year, week, forceRefresh: true });
     const games = scoreboard.games || [];
 
@@ -20,44 +16,37 @@ class GradingService {
       finalGameMap.set(g.id, g.winnerId);
     });
 
-    // 2. Fetch all pending picks for these games
     const gameIds = Array.from(finalGameMap.keys());
     const placeholders = gameIds.map(() => '?').join(',');
 
-    const picksToGrade = db.prepare(`
+    const picksToGrade = await db.prepare(`
       SELECT * FROM picks 
       WHERE game_id IN (${placeholders})
     `).all(...gameIds);
 
-    const updatePickStmt = db.prepare(`
-      UPDATE picks 
-      SET is_correct = ?, points_awarded = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `);
-
     let gradedCount = 0;
     const affectedUserIds = new Set();
 
-    const transaction = db.transaction(() => {
-      for (const pick of picksToGrade) {
-        const winningTeamId = finalGameMap.get(pick.game_id);
-        if (!winningTeamId) continue;
+    for (const pick of picksToGrade) {
+      const winningTeamId = finalGameMap.get(pick.game_id);
+      if (!winningTeamId) continue;
 
-        const isCorrect = (pick.predicted_winner_id === winningTeamId) ? 1 : 0;
-        const basePoints = (pick.confidence_points || 1) * 10;
-        const pointsAwarded = isCorrect === 1 ? basePoints : 0;
+      const isCorrect = (pick.predicted_winner_id === winningTeamId) ? 1 : 0;
+      const basePoints = (pick.confidence_points || 1) * 10;
+      const pointsAwarded = isCorrect === 1 ? basePoints : 0;
 
-        updatePickStmt.run(isCorrect, pointsAwarded, pick.id);
-        affectedUserIds.add(pick.user_id);
-        gradedCount++;
-      }
-    });
+      await db.prepare(`
+        UPDATE picks 
+        SET is_correct = ?, points_awarded = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(isCorrect, pointsAwarded, pick.id);
 
-    transaction();
+      affectedUserIds.add(pick.user_id);
+      gradedCount++;
+    }
 
-    // 3. Recalculate user statistics for affected users
     for (const userId of affectedUserIds) {
-      this.recalculateUserStats(userId);
+      await this.recalculateUserStats(userId);
     }
 
     return {
@@ -67,11 +56,8 @@ class GradingService {
     };
   }
 
-  /**
-   * Recalculates total points, correct picks, and streaks for a user
-   */
-  recalculateUserStats(userId) {
-    const picks = db.prepare(`
+  async recalculateUserStats(userId) {
+    const picks = await db.prepare(`
       SELECT p.*, g.game_date 
       FROM picks p
       LEFT JOIN games_cache g ON p.game_id = g.game_id
@@ -95,10 +81,9 @@ class GradingService {
         tempStreak = 0;
       }
     }
-    // Current streak is based on trailing picks
     currentStreak = tempStreak;
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE users 
       SET total_points = ?, total_picks = ?, correct_picks = ?, current_streak = ?, best_streak = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?

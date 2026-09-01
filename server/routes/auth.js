@@ -14,7 +14,7 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Email, username, and password are required' });
     }
 
-    const existingUser = db.prepare('SELECT id FROM users WHERE email = ? OR username = ?').get(email.toLowerCase(), username.toLowerCase());
+    const existingUser = await db.prepare('SELECT id FROM users WHERE email = ? OR username = ?').get(email.toLowerCase(), username.toLowerCase());
     if (existingUser) {
       return res.status(400).json({ error: 'A user with this email or username already exists' });
     }
@@ -24,22 +24,22 @@ router.post('/register', async (req, res) => {
     const userId = 'usr_' + crypto.randomBytes(8).toString('hex');
     const finalDisplayName = displayName || username;
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO users (id, email, username, password_hash, display_name, favorite_team, jersey_number)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(userId, email.toLowerCase(), username.toLowerCase(), passwordHash, finalDisplayName, favoriteTeam, jerseyNumber);
 
     // Auto-enroll into the default public "All-American Pick'em League"
-    const defaultParty = db.prepare('SELECT id FROM parties WHERE id = ?').get('pty_all_american');
+    const defaultParty = await db.prepare('SELECT id FROM parties WHERE id = ?').get('pty_all_american');
     if (defaultParty) {
       const memberId = 'pm_' + crypto.randomBytes(6).toString('hex');
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO party_members (id, party_id, user_id, role)
         VALUES (?, ?, ?, 'member')
       `).run(memberId, defaultParty.id, userId);
     }
 
-    const newUser = db.prepare('SELECT id, email, username, display_name, favorite_team, avatar_url, jersey_number, total_points, correct_picks, total_picks, current_streak, best_streak FROM users WHERE id = ?').get(userId);
+    const newUser = await db.prepare('SELECT id, email, username, display_name, favorite_team, avatar_url, jersey_number, total_points, correct_picks, total_picks, current_streak, best_streak FROM users WHERE id = ?').get(userId);
     const token = generateToken(newUser);
 
     return res.status(201).json({
@@ -62,7 +62,7 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Username/email and password are required' });
     }
 
-    const user = db.prepare(`
+    const user = await db.prepare(`
       SELECT * FROM users 
       WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)
     `).get(login.trim(), login.trim());
@@ -91,16 +91,20 @@ router.post('/login', async (req, res) => {
 });
 
 // GET /api/auth/me
-router.get('/me', authenticateToken, (req, res) => {
-  const user = db.prepare('SELECT id, email, username, display_name, favorite_team, avatar_url, jersey_number, total_points, correct_picks, total_picks, current_streak, best_streak FROM users WHERE id = ?').get(req.user.id);
-  return res.json({ user: user || req.user });
+router.get('/me', authenticateToken, async (req, res) => {
+  try {
+    const user = await db.prepare('SELECT id, email, username, display_name, favorite_team, avatar_url, jersey_number, total_points, correct_picks, total_picks, current_streak, best_streak FROM users WHERE id = ?').get(req.user.id);
+    return res.json({ user: user || req.user });
+  } catch (err) {
+    return res.json({ user: req.user });
+  }
 });
 
 // PUT /api/auth/profile
-router.put('/profile', authenticateToken, (req, res) => {
+router.put('/profile', authenticateToken, async (req, res) => {
   try {
     const { displayName, favoriteTeam, avatarUrl, jerseyNumber } = req.body;
-    db.prepare(`
+    await db.prepare(`
       UPDATE users 
       SET display_name = COALESCE(?, display_name),
           favorite_team = COALESCE(?, favorite_team),
@@ -116,7 +120,7 @@ router.put('/profile', authenticateToken, (req, res) => {
       req.user.id
     );
 
-    const updatedUser = db.prepare('SELECT id, email, username, display_name, favorite_team, avatar_url, jersey_number, total_points, correct_picks, total_picks, current_streak, best_streak FROM users WHERE id = ?').get(req.user.id);
+    const updatedUser = await db.prepare('SELECT id, email, username, display_name, favorite_team, avatar_url, jersey_number, total_points, correct_picks, total_picks, current_streak, best_streak FROM users WHERE id = ?').get(req.user.id);
     return res.json({ message: 'Profile updated', user: updatedUser });
   } catch (err) {
     console.error('Update profile error:', err);
@@ -124,21 +128,25 @@ router.put('/profile', authenticateToken, (req, res) => {
   }
 });
 
-// GET /api/auth/demo-users (For quick multi-user testing & demonstration)
-router.get('/demo-users', (req, res) => {
-  const users = db.prepare(`
-    SELECT id, email, username, display_name, favorite_team, avatar_url, jersey_number, total_points, correct_picks, total_picks, current_streak
-    FROM users 
-    LIMIT 8
-  `).all();
-  return res.json({ demoUsers: users });
+// GET /api/auth/demo-users
+router.get('/demo-users', async (req, res) => {
+  try {
+    const users = await db.prepare(`
+      SELECT id, email, username, display_name, favorite_team, avatar_url, jersey_number, total_points, correct_picks, total_picks, current_streak
+      FROM users 
+      LIMIT 8
+    `).all();
+    return res.json({ demoUsers: users });
+  } catch (err) {
+    return res.json({ demoUsers: [] });
+  }
 });
 
 // POST /api/auth/switch-demo
-router.post('/switch-demo', (req, res) => {
+router.post('/switch-demo', async (req, res) => {
   try {
     const { userId } = req.body;
-    const user = db.prepare('SELECT id, email, username, display_name, favorite_team, avatar_url, jersey_number, total_points, correct_picks, total_picks, current_streak, best_streak FROM users WHERE id = ?').get(userId);
+    const user = await db.prepare('SELECT id, email, username, display_name, favorite_team, avatar_url, jersey_number, total_points, correct_picks, total_picks, current_streak, best_streak FROM users WHERE id = ?').get(userId);
 
     if (!user) {
       return res.status(404).json({ error: 'Demo user not found' });

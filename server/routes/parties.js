@@ -14,9 +14,9 @@ function generatePartyCode(prefix = 'CFB') {
 }
 
 // GET /api/parties/my-parties
-router.get('/my-parties', authenticateToken, (req, res) => {
+router.get('/my-parties', authenticateToken, async (req, res) => {
   try {
-    const parties = db.prepare(`
+    const parties = await db.prepare(`
       SELECT p.*, pm.role as user_role, pm.joined_at,
              (SELECT COUNT(*) FROM party_members WHERE party_id = p.id) as member_count,
              u.display_name as creator_name
@@ -35,13 +35,13 @@ router.get('/my-parties', authenticateToken, (req, res) => {
 });
 
 // POST /api/parties/create
-router.post('/create', authenticateToken, (req, res) => {
+router.post('/create', authenticateToken, async (req, res) => {
   try {
     const { 
       name, 
       description = '', 
       conferenceFocus = 'ALL', 
-      scoringType = 'STRAIGHT_UP', // 'STRAIGHT_UP', 'ATS', 'OVER_UNDER', 'CONFIDENCE'
+      scoringType = 'STRAIGHT_UP',
       icon = '🏈' 
     } = req.body;
 
@@ -54,29 +54,29 @@ router.post('/create', authenticateToken, (req, res) => {
     let inviteCode = generatePartyCode(prefix);
 
     let attempts = 0;
-    while (attempts < 5 && db.prepare('SELECT id FROM parties WHERE invite_code = ?').get(inviteCode)) {
+    while (attempts < 5 && await db.prepare('SELECT id FROM parties WHERE invite_code = ?').get(inviteCode)) {
       inviteCode = generatePartyCode(prefix);
       attempts++;
     }
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO parties (id, name, description, invite_code, creator_id, conference_focus, scoring_type, icon)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(partyId, name.trim(), description.trim(), inviteCode, req.user.id, conferenceFocus, scoringType, icon);
 
     const memberId = 'pm_' + crypto.randomBytes(6).toString('hex');
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO party_members (id, party_id, user_id, role)
       VALUES (?, ?, ?, 'owner')
     `).run(memberId, partyId, req.user.id);
 
     const msgId = 'msg_' + crypto.randomBytes(8).toString('hex');
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO party_messages (id, party_id, user_id, message, type)
       VALUES (?, ?, ?, ?, 'system')
     `).run(msgId, partyId, req.user.id, `🎉 Welcome to ${name}! Scoring Mode: ${scoringType}. Invite code: ${inviteCode}`);
 
-    const createdParty = db.prepare('SELECT * FROM parties WHERE id = ?').get(partyId);
+    const createdParty = await db.prepare('SELECT * FROM parties WHERE id = ?').get(partyId);
     return res.status(201).json({
       message: 'Prediction party created!',
       party: createdParty
@@ -88,7 +88,7 @@ router.post('/create', authenticateToken, (req, res) => {
 });
 
 // POST /api/parties/join
-router.post('/join', authenticateToken, (req, res) => {
+router.post('/join', authenticateToken, async (req, res) => {
   try {
     const { inviteCode } = req.body;
     if (!inviteCode || inviteCode.trim().length === 0) {
@@ -96,25 +96,25 @@ router.post('/join', authenticateToken, (req, res) => {
     }
 
     const cleanCode = inviteCode.trim().toUpperCase();
-    const party = db.prepare('SELECT * FROM parties WHERE UPPER(invite_code) = ?').get(cleanCode);
+    const party = await db.prepare('SELECT * FROM parties WHERE UPPER(invite_code) = ?').get(cleanCode);
 
     if (!party) {
       return res.status(404).json({ error: 'No prediction party found with invite code: ' + cleanCode });
     }
 
-    const existing = db.prepare('SELECT id FROM party_members WHERE party_id = ? AND user_id = ?').get(party.id, req.user.id);
+    const existing = await db.prepare('SELECT id FROM party_members WHERE party_id = ? AND user_id = ?').get(party.id, req.user.id);
     if (existing) {
       return res.status(400).json({ error: 'You are already a member of this party!' });
     }
 
     const memberId = 'pm_' + crypto.randomBytes(6).toString('hex');
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO party_members (id, party_id, user_id, role)
       VALUES (?, ?, ?, 'member')
     `).run(memberId, party.id, req.user.id);
 
     const msgId = 'msg_' + crypto.randomBytes(8).toString('hex');
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO party_messages (id, party_id, user_id, message, type)
       VALUES (?, ?, ?, ?, 'system')
     `).run(msgId, party.id, req.user.id, `👋 ${req.user.display_name} has joined the party!`);
@@ -130,42 +130,37 @@ router.post('/join', authenticateToken, (req, res) => {
 });
 
 // POST /api/parties/:id/leave
-router.post('/:id/leave', authenticateToken, (req, res) => {
+router.post('/:id/leave', authenticateToken, async (req, res) => {
   try {
     const partyId = req.params.id;
 
-    // Check membership
-    const membership = db.prepare('SELECT * FROM party_members WHERE party_id = ? AND user_id = ?').get(partyId, req.user.id);
+    const membership = await db.prepare('SELECT * FROM party_members WHERE party_id = ? AND user_id = ?').get(partyId, req.user.id);
     if (!membership) {
       return res.status(404).json({ error: 'You are not a member of this party' });
     }
 
-    const party = db.prepare('SELECT * FROM parties WHERE id = ?').get(partyId);
+    const party = await db.prepare('SELECT * FROM parties WHERE id = ?').get(partyId);
     if (!party) {
       return res.status(404).json({ error: 'Party not found' });
     }
 
-    // Check other members
-    const otherMembers = db.prepare('SELECT * FROM party_members WHERE party_id = ? AND user_id != ? ORDER BY joined_at ASC').all(partyId, req.user.id);
+    const otherMembers = await db.prepare('SELECT * FROM party_members WHERE party_id = ? AND user_id != ? ORDER BY joined_at ASC').all(partyId, req.user.id);
 
     if (membership.role === 'owner') {
       if (otherMembers.length > 0) {
-        // Transfer ownership
         const newOwner = otherMembers[0];
-        db.prepare('UPDATE party_members SET role = \'owner\' WHERE id = ?').run(newOwner.id);
-        db.prepare('UPDATE parties SET creator_id = ? WHERE id = ?').run(newOwner.user_id, partyId);
+        await db.prepare('UPDATE party_members SET role = \'owner\' WHERE id = ?').run(newOwner.id);
+        await db.prepare('UPDATE parties SET creator_id = ? WHERE id = ?').run(newOwner.user_id, partyId);
       } else {
-        // Delete empty party
-        db.prepare('DELETE FROM parties WHERE id = ?').run(partyId);
+        await db.prepare('DELETE FROM parties WHERE id = ?').run(partyId);
         return res.json({ message: `You have left and closed ${party.name}`, partyId });
       }
     }
 
-    // Remove user
-    db.prepare('DELETE FROM party_members WHERE party_id = ? AND user_id = ?').run(partyId, req.user.id);
+    await db.prepare('DELETE FROM party_members WHERE party_id = ? AND user_id = ?').run(partyId, req.user.id);
 
     const msgId = 'msg_' + crypto.randomBytes(8).toString('hex');
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO party_messages (id, party_id, user_id, message, type)
       VALUES (?, ?, ?, ?, 'system')
     `).run(msgId, partyId, req.user.id, `🚪 ${req.user.display_name} has left the party.`);
@@ -181,10 +176,10 @@ router.post('/:id/leave', authenticateToken, (req, res) => {
 });
 
 // GET /api/parties/:id
-router.get('/:id', authenticateToken, (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const partyId = req.params.id;
-    const party = db.prepare(`
+    const party = await db.prepare(`
       SELECT p.*, u.display_name as creator_name
       FROM parties p
       JOIN users u ON p.creator_id = u.id
@@ -195,7 +190,7 @@ router.get('/:id', authenticateToken, (req, res) => {
       return res.status(404).json({ error: 'Party not found' });
     }
 
-    const members = db.prepare(`
+    const members = await db.prepare(`
       SELECT u.id, u.username, u.display_name, u.favorite_team, u.avatar_url,
              u.total_points, u.correct_picks, u.total_picks, u.current_streak, u.best_streak,
              pm.role, pm.joined_at,
@@ -228,10 +223,10 @@ router.get('/:id', authenticateToken, (req, res) => {
 });
 
 // GET /api/parties/:id/messages
-router.get('/:id/messages', authenticateToken, (req, res) => {
+router.get('/:id/messages', authenticateToken, async (req, res) => {
   try {
     const partyId = req.params.id;
-    const messages = db.prepare(`
+    const messages = await db.prepare(`
       SELECT m.*, u.display_name, u.username, u.favorite_team, u.avatar_url
       FROM party_messages m
       JOIN users u ON m.user_id = u.id
@@ -248,7 +243,7 @@ router.get('/:id/messages', authenticateToken, (req, res) => {
 });
 
 // POST /api/parties/:id/messages
-router.post('/:id/messages', authenticateToken, (req, res) => {
+router.post('/:id/messages', authenticateToken, async (req, res) => {
   try {
     const partyId = req.params.id;
     const { message, type = 'chat' } = req.body;
@@ -258,12 +253,12 @@ router.post('/:id/messages', authenticateToken, (req, res) => {
     }
 
     const msgId = 'msg_' + crypto.randomBytes(8).toString('hex');
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO party_messages (id, party_id, user_id, message, type)
       VALUES (?, ?, ?, ?, ?)
     `).run(msgId, partyId, req.user.id, message.trim(), type);
 
-    const inserted = db.prepare(`
+    const inserted = await db.prepare(`
       SELECT m.*, u.display_name, u.username, u.favorite_team, u.avatar_url
       FROM party_messages m
       JOIN users u ON m.user_id = u.id

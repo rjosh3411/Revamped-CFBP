@@ -6,7 +6,7 @@ const { optionalAuth } = require('../middleware/auth');
 const { calculateBettingLine } = require('../services/oddsService');
 
 // GET /api/teams
-router.get('/', optionalAuth, (req, res) => {
+router.get('/', optionalAuth, async (req, res) => {
   try {
     const conference = req.query.conference;
     let teams = TEAMS_2026;
@@ -19,16 +19,27 @@ router.get('/', optionalAuth, (req, res) => {
     // Calculate user's projected record for each team if logged in
     let userPicksMap = new Map();
     if (req.user) {
-      const picks = db.prepare(`SELECT * FROM picks WHERE user_id = ? AND season_year = 2026`).all(req.user.id);
+      const picks = await db.prepare(`SELECT * FROM picks WHERE user_id = ? AND (season_year = 2026 OR season_year = '2026')`).all(req.user.id);
       picks.forEach(p => userPicksMap.set(p.game_id, p));
     }
 
+    // Fetch all schedules in one query for speed
+    const allSchedules = await db.prepare(`
+      SELECT * FROM team_schedules 
+      WHERE (season_year = 2026 OR season_year = '2026')
+      ORDER BY week_number ASC
+    `).all();
+
+    const schedulesByTeam = new Map();
+    for (const s of allSchedules) {
+      if (!schedulesByTeam.has(s.team_id)) {
+        schedulesByTeam.set(s.team_id, []);
+      }
+      schedulesByTeam.get(s.team_id).push(s);
+    }
+
     const teamsWithRecords = teams.map(team => {
-      const teamSchedules = db.prepare(`
-        SELECT * FROM team_schedules 
-        WHERE team_id = ? AND (season_year = 2026 OR season_year = '2026')
-        ORDER BY week_number ASC
-      `).all(team.id);
+      const teamSchedules = schedulesByTeam.get(team.id) || [];
 
       let projectedWins = 0;
       let projectedLosses = 0;
@@ -80,7 +91,7 @@ router.get('/', optionalAuth, (req, res) => {
 });
 
 // GET /api/teams/:id/schedule (Pulls verified official 2026 ESPN schedule with betting lines & lockout)
-router.get('/:id/schedule', optionalAuth, (req, res) => {
+router.get('/:id/schedule', optionalAuth, async (req, res) => {
   try {
     const teamId = req.params.id.toLowerCase();
     const team = TEAMS_2026.find(t => t.id === teamId || t.name.toLowerCase() === teamId || t.abbreviation.toLowerCase() === teamId);
@@ -90,16 +101,16 @@ router.get('/:id/schedule', optionalAuth, (req, res) => {
     }
 
     // Pull from team_schedules table
-    const schedules = db.prepare(`
+    const schedules = await db.prepare(`
       SELECT * FROM team_schedules 
-      WHERE team_id = ? AND season_year = 2026
+      WHERE team_id = ? AND (season_year = 2026 OR season_year = '2026')
       ORDER BY week_number ASC, game_date ASC
     `).all(team.id);
 
     // Fetch user picks
     let userPicksMap = new Map();
     if (req.user) {
-      const picks = db.prepare(`SELECT * FROM picks WHERE user_id = ? AND season_year = 2026`).all(req.user.id);
+      const picks = await db.prepare(`SELECT * FROM picks WHERE user_id = ? AND (season_year = 2026 OR season_year = '2026')`).all(req.user.id);
       picks.forEach(p => userPicksMap.set(p.game_id, p));
     }
 
