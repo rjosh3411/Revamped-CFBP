@@ -1,0 +1,96 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-dark: #000000;
+  --bg-gradient: linear-gradient(180deg, #0c0e12 0%, #000000 100%);
+  --bg-card: #0e1218;
+  --bg-card-hover: #151b24;
+  --border-light: rgba(250, 246, 232, 0.08);
+  --border-active: rgba(250, 246, 232, 0.35);
+  --text-primary: #faf6e8;
+  --text-secondary: #dcd8c8;
+  --text-muted: #9a978a;
+  --color-win: #86efac;
+  --color-win-glow: rgba(134, 239, 172, 0.15);
+  --color-loss: #fca5a5;
+  --color-loss-glow: rgba(252, 165, 165, 0.15);
+  --nav-height: 68px;
+}
+
+@layer base {
+  body {
+    background: var(--bg-gradient);
+    background-attachment: fixed;
+    color: var(--text-primary);
+    min-height: 100vh;
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  h1, .script-title {
+    font-family: 'Pacifico', cursive;
+    font-weight: 400;
+  }
+
+  h2, h3, h4, h5, h6, .athletic-title, .tab-btn, .nav-item, .team-card-name, .pred-btn, .stat-value {
+    font-family: 'League Spartan', sans-serif;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+  }
+}
+
+/* Custom modern scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #090c10;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e2634;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Glow effects */
+.glow-accent {
+  box-shadow: 0 0 25px -5px rgba(250, 246, 232, 0.15);
+}
+
+.glow-win {
+  box-shadow: 0 0 20px rgba(134, 239, 172, 0.2);
+}
+
+.glow-loss {
+  box-shadow: 0 0 20px rgba(252, 165, 165, 0.2);
+}
+
+/* Watermark styles */
+.mascot-watermark {
+  position: fixed;
+  opacity: 0.04;
+  pointer-events: none;
+  z-index: 0;
+  filter: grayscale(30%);
+}
+
+.mascot-watermark-left {
+  top: 15%;
+  left: -80px;
+  width: 380px;
+  height: 380px;
+}
+
+.mascot-watermark-right {
+  bottom: 10%;
+  right: -80px;
+  width: 380px;
+  height: 380px;
+}

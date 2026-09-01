@@ -1,0 +1,23 @@
+# Dependencies
+node_modules
+client/node_modules
+
+# Build outputs
+client/dist
+.vercel
+dist
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# SQLite Database (for local dev)
+server/data/*.db-wal
+server/data/*.db-shm
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
