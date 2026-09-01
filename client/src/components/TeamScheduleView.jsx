@@ -6,6 +6,7 @@ import {
   Tv, Award, Sparkles, ChevronRight, Flame, Shield, Lock, DollarSign 
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { getMascotForTeam } from '../utils/mascotData';
 
 export function TeamScheduleView({ team, onBack, onPickChanged }) {
   const { user } = useAuth();
@@ -180,8 +181,9 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
             </div>
           </div>
 
-          {/* User Projected Record Badge with Peeking Mascot */}
+          {/* User Projected Record Badge with Authentic Peeking Mascot */}
           {(() => {
+            const mascot = getMascotForTeam(team);
             const totalPicked = winCount + lossCount;
             let mascotMood = 'CURIOUS';
             if (winCount >= 10) {
@@ -195,59 +197,55 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
             }
 
             return (
-              <div className="relative pt-7 min-w-[155px] self-center sm:self-auto">
+              <div className="relative pt-8 min-w-[160px] self-center sm:self-auto">
                 {/* Dynamic Peeking Mascot Container */}
-                <div 
-                  className={`absolute left-1/2 -translate-x-1/2 z-0 pointer-events-none transition-all duration-500 ease-out flex flex-col items-center ${
-                    mascotBounce ? 'animate-mascot-peek' : ''
-                  } ${
-                    mascotMood === 'HYPE'
-                      ? '-top-6 scale-110'
-                      : mascotMood === 'CONFIDENT'
-                        ? '-top-4 scale-100'
-                        : mascotMood === 'NERVOUS'
-                          ? '-top-1 scale-90 opacity-80 animate-mascot-nervous'
-                          : '-top-3 scale-95 opacity-90'
-                  }`}
-                >
-                  {/* Mood Floating Badge */}
-                  <div className="text-xs mb-0.5 filter drop-shadow select-none">
-                    {mascotMood === 'HYPE' && <span className="animate-pulse">🔥</span>}
-                    {mascotMood === 'CONFIDENT' && <span>👍</span>}
-                    {mascotMood === 'NERVOUS' && <span>💧</span>}
-                    {mascotMood === 'CURIOUS' && <span>👀</span>}
-                  </div>
+                {mascot && (
+                  <div 
+                    className={`absolute left-1/2 -translate-x-1/2 z-0 pointer-events-none transition-all duration-500 ease-out flex flex-col items-center ${
+                      mascotBounce ? 'animate-mascot-peek' : ''
+                    } ${
+                      mascotMood === 'HYPE'
+                        ? '-top-8 scale-110'
+                        : mascotMood === 'CONFIDENT'
+                          ? '-top-6 scale-100'
+                          : mascotMood === 'NERVOUS'
+                            ? '-top-2 scale-90 opacity-80 animate-mascot-nervous'
+                            : '-top-4 scale-95 opacity-95'
+                    }`}
+                  >
+                    {/* Mood Floating Badge & Mascot Name Tooltip */}
+                    <div className="text-[11px] font-black mb-0.5 filter drop-shadow select-none flex items-center space-x-1 bg-black/60 px-2 py-0.5 rounded-full border border-white/10 text-amber-300">
+                      <span>{mascotMood === 'HYPE' ? '🔥' : mascotMood === 'CONFIDENT' ? '👍' : mascotMood === 'NERVOUS' ? '💧' : '👀'}</span>
+                      <span className="text-[9px] font-sans font-bold text-white max-w-[90px] truncate">{mascot.name}</span>
+                    </div>
 
-                  {/* Mascot Head */}
-                  <div className="relative">
-                    <img
-                      src={team.logoUrl}
-                      alt={`${team.name} Mascot`}
-                      className={`w-11 h-11 object-contain drop-shadow-xl transition-all ${
+                    {/* Mascot Character Head (Authentic Mascot) */}
+                    <div 
+                      className={`w-14 h-14 drop-shadow-2xl transition-all ${
                         mascotMood === 'HYPE' ? 'animate-mascot-hype' : ''
                       }`}
-                      onError={(e) => { e.target.src = 'https://a.espncdn.com/i/teamlogos/ncaa/500/7.png'; }}
+                      dangerouslySetInnerHTML={{ __html: mascot.svg }}
                     />
-                  </div>
 
-                  {/* Mascot Paws Resting On Top Border */}
-                  <div className="flex items-center justify-between w-9 -mt-1 z-20">
-                    <div 
-                      className="w-2.5 h-2 rounded-t-full shadow-sm border-t border-x"
-                      style={{ 
-                        backgroundColor: team.colors?.primary || '#faf6e8', 
-                        borderColor: 'rgba(255,255,255,0.4)' 
-                      }}
-                    />
-                    <div 
-                      className="w-2.5 h-2 rounded-t-full shadow-sm border-t border-x"
-                      style={{ 
-                        backgroundColor: team.colors?.primary || '#faf6e8', 
-                        borderColor: 'rgba(255,255,255,0.4)' 
-                      }}
-                    />
+                    {/* Mascot Paws Resting On Top Border */}
+                    <div className="flex items-center justify-between w-10 -mt-2 z-20">
+                      <div 
+                        className="w-3 h-2.5 rounded-t-full shadow-md border-t-2 border-x"
+                        style={{ 
+                          backgroundColor: mascot.pawColor || team.colors?.primary || '#faf6e8', 
+                          borderColor: mascot.pawBorder || 'rgba(255,255,255,0.6)' 
+                        }}
+                      />
+                      <div 
+                        className="w-3 h-2.5 rounded-t-full shadow-md border-t-2 border-x"
+                        style={{ 
+                          backgroundColor: mascot.pawColor || team.colors?.primary || '#faf6e8', 
+                          borderColor: mascot.pawBorder || 'rgba(255,255,255,0.6)' 
+                        }}
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Projection Card Box */}
                 <div className="relative z-10 bg-black/85 p-3.5 rounded-2xl border border-white/15 text-center shadow-2xl backdrop-blur-md">
