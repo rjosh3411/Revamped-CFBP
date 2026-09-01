@@ -36,7 +36,7 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString(), app: 'Revamped CFB predictions' });
 });
 
-// Serve frontend static build in production
+// Serve frontend static build in local production mode
 const clientDistPath = path.join(__dirname, '..', 'client', 'dist');
 app.use(express.static(clientDistPath));
 
@@ -52,8 +52,11 @@ app.get('*', (req, res) => {
   });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🏈 CFB Prediction Party server is running on http://localhost:${PORT} and http://127.0.0.1:${PORT}`);
-});
+// Only start listening if NOT running in a serverless environment like Vercel
+if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME && !process.env.LAMBDA_TASK_ROOT) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🏈 CFB Prediction Party server is running on http://localhost:${PORT} and http://127.0.0.1:${PORT}`);
+  });
+}
 
 module.exports = app;
