@@ -182,12 +182,19 @@ router.get('/:id/schedule', optionalAuth, async (req, res) => {
         isHome: s.is_home === 1
       });
 
+      const oppLogo = s.opponent_logo || 'https://a.espncdn.com/i/teamlogos/ncaa/500/7.png';
+
       return {
         gameId: s.game_id,
         week: s.week_number,
         date: s.game_date,
-        opponent: s.opponent_name,
-        opponentLogo: s.opponent_logo,
+        opponent: {
+          name: s.opponent_name,
+          logo: oppLogo,
+          rank: s.opponent_rank
+        },
+        opponentName: s.opponent_name,
+        opponentLogo: oppLogo,
         opponentRank: s.opponent_rank,
         isHome: s.is_home === 1,
         venue: s.venue_name,
@@ -200,7 +207,9 @@ router.get('/:id/schedule', optionalAuth, async (req, res) => {
         isLocked,
         isPastGame,
         odds,
-        userPrediction
+        bettingLine: odds,
+        userPrediction: userPrediction ? (userPrediction.isWinForTeam ? 'WIN' : 'LOSS') : null,
+        userPick: userPrediction
       };
     });
 

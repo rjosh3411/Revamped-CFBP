@@ -47,8 +47,9 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
     const game = scheduleData.find(g => g.gameId === gameId);
     if (!game) return;
 
-    const winnerName = isWin ? team.name : game.opponent.name;
-    const winnerId = isWin ? team.id : (game.opponent.name.toLowerCase().replace(/\s+/g, '-'));
+    const oppName = game.opponent?.name || game.opponentName || game.opponent || 'Opponent';
+    const winnerName = isWin ? team.name : oppName;
+    const winnerId = isWin ? team.id : oppName.toLowerCase().replace(/\s+/g, '-');
     const currentConfidence = confidenceLevels[gameId] || null;
 
     try {
@@ -237,14 +238,14 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
                     <div className="flex items-center space-x-3">
                       <div className="relative flex-shrink-0">
                         <img
-                          src={item.opponent.logo}
-                          alt={item.opponent.name}
+                          src={item.opponent?.logo || item.opponentLogo || 'https://a.espncdn.com/i/teamlogos/ncaa/500/7.png'}
+                          alt={item.opponent?.name || item.opponentName || item.opponent || 'Opponent'}
                           className="w-11 h-11 object-contain drop-shadow"
                           onError={(e) => { e.target.src = 'https://a.espncdn.com/i/teamlogos/ncaa/500/7.png'; }}
                         />
-                        {item.opponent.rank && (
+                        {(item.opponent?.rank || item.opponentRank) && (
                           <span className="absolute -top-1 -left-1 bg-amber-500 text-black text-[9px] font-black px-1 rounded-full">
-                            #{item.opponent.rank}
+                            #{item.opponent?.rank || item.opponentRank}
                           </span>
                         )}
                       </div>
@@ -264,7 +265,7 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
                           )}
                         </div>
                         <div className="text-sm sm:text-base font-extrabold text-white line-clamp-1 athletic-title mt-0.5">
-                          {item.opponent.name}
+                          {item.opponent?.name || item.opponentName || item.opponent || 'Opponent'}
                         </div>
                         <div className="text-[10px] text-[#9a978a] flex items-center space-x-1 mt-0.5">
                           <MapPin className="w-2.5 h-2.5" />
