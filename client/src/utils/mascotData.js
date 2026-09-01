@@ -489,16 +489,36 @@ export const MASCOT_REGISTRY = {
   }
 };
 
+export const REAL_MASCOT_PHOTOS = {
+  'georgia': '/mascots/georgia.jpg',
+  'ohio-state': '/mascots/ohio-state.jpg',
+  'oregon': '/mascots/oregon.jpg',
+  'alabama': '/mascots/alabama.jpg',
+  'texas': '/mascots/texas.jpg',
+  'florida': '/mascots/florida.jpg',
+  'lsu': '/mascots/lsu.jpg',
+  'tennessee': '/mascots/tennessee.jpg',
+  'notre-dame': '/mascots/notre-dame.jpg',
+  'miami': '/mascots/miami.jpg',
+  'usc': '/mascots/usc.jpg',
+  'wisconsin': '/mascots/wisconsin.jpg',
+  'florida-state': '/mascots/florida-state.jpg',
+  'michigan': '/mascots/michigan.jpg'
+};
+
 /**
- * Fallback Mascot Generator for any other FBS team
- * Creates a unique stylized athletic animal/mascot character headshot based on team nickname
+ * Mascot Generator for any FBS team
+ * Returns official photorealistic sideline costume headshot or stylized mascot character
  */
 export function getMascotForTeam(team) {
   if (!team) return null;
   const tid = team.id?.toLowerCase() || '';
+  const photoUrl = REAL_MASCOT_PHOTOS[tid] || null;
+
   if (MASCOT_REGISTRY[tid]) {
     return {
       ...MASCOT_REGISTRY[tid],
+      photoUrl,
       teamName: team.name,
       teamId: team.id
     };
@@ -511,6 +531,7 @@ export function getMascotForTeam(team) {
 
   return {
     name: `${nickname} Character`,
+    photoUrl,
     pawColor: primaryColor,
     pawBorder: secondaryColor,
     svg: `

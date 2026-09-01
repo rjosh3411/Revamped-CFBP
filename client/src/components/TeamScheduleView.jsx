@@ -219,28 +219,38 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
                       <span className="text-[9px] font-sans font-bold text-white max-w-[90px] truncate">{mascot.name}</span>
                     </div>
 
-                    {/* Mascot Character Head (Authentic Mascot) */}
-                    <div 
-                      className={`w-14 h-14 drop-shadow-2xl transition-all ${
-                        mascotMood === 'HYPE' ? 'animate-mascot-hype' : ''
-                      }`}
-                      dangerouslySetInnerHTML={{ __html: mascot.svg }}
-                    />
+                    {/* Mascot Character Head (Real Costume Headshot Photo or SVG) */}
+                    {mascot.photoUrl ? (
+                      <div className="relative w-16 h-16 sm:w-18 sm:h-18 rounded-t-full overflow-hidden border-2 border-amber-400/60 shadow-2xl bg-black/50">
+                        <img
+                          src={mascot.photoUrl}
+                          alt={mascot.name}
+                          className="w-full h-full object-cover object-top filter contrast-105"
+                        />
+                      </div>
+                    ) : (
+                      <div 
+                        className={`w-14 h-14 drop-shadow-2xl transition-all ${
+                          mascotMood === 'HYPE' ? 'animate-mascot-hype' : ''
+                        }`}
+                        dangerouslySetInnerHTML={{ __html: mascot.svg }}
+                      />
+                    )}
 
                     {/* Mascot Paws Resting On Top Border */}
-                    <div className="flex items-center justify-between w-10 -mt-2 z-20">
+                    <div className="flex items-center justify-between w-11 -mt-2 z-20">
                       <div 
-                        className="w-3 h-2.5 rounded-t-full shadow-md border-t-2 border-x"
+                        className="w-3.5 h-3 rounded-t-full shadow-lg border-t-2 border-x"
                         style={{ 
                           backgroundColor: mascot.pawColor || team.colors?.primary || '#faf6e8', 
-                          borderColor: mascot.pawBorder || 'rgba(255,255,255,0.6)' 
+                          borderColor: mascot.pawBorder || 'rgba(255,255,255,0.7)' 
                         }}
                       />
                       <div 
-                        className="w-3 h-2.5 rounded-t-full shadow-md border-t-2 border-x"
+                        className="w-3.5 h-3 rounded-t-full shadow-lg border-t-2 border-x"
                         style={{ 
                           backgroundColor: mascot.pawColor || team.colors?.primary || '#faf6e8', 
-                          borderColor: mascot.pawBorder || 'rgba(255,255,255,0.6)' 
+                          borderColor: mascot.pawBorder || 'rgba(255,255,255,0.7)' 
                         }}
                       />
                     </div>
