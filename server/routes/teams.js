@@ -26,21 +26,33 @@ router.get('/', optionalAuth, (req, res) => {
     const teamsWithRecords = teams.map(team => {
       const teamSchedules = db.prepare(`
         SELECT * FROM team_schedules 
-        WHERE team_id = ? AND season_year = 2026
+        WHERE team_id = ? AND (season_year = 2026 OR season_year = '2026')
         ORDER BY week_number ASC
       `).all(team.id);
 
       let projectedWins = 0;
       let projectedLosses = 0;
 
+      const tName = (team.name || '').toLowerCase();
+      const tNick = (team.nickname || '').toLowerCase();
+      const tAbbr = (team.abbreviation || '').toLowerCase();
+      const tId = (team.id || '').toLowerCase();
+
       for (const s of teamSchedules) {
         const userPick = userPicksMap.get(s.game_id);
         if (userPick) {
           const pickedName = (userPick.predicted_winner_name || '').toLowerCase();
-          const tName = team.name.toLowerCase();
-          const tAbbr = team.abbreviation.toLowerCase();
+          const pickedId = (userPick.predicted_winner_id || '').toLowerCase();
 
-          if (pickedName.includes(tName) || pickedName === tAbbr || userPick.predicted_winner_id === team.id) {
+          const isWin = (
+            pickedId === tId ||
+            (tId && pickedId.includes(tId)) ||
+            (pickedName && tName && (pickedName.includes(tName) || tName.includes(pickedName))) ||
+            (tNick && pickedName.includes(tNick)) ||
+            (tAbbr && pickedName === tAbbr)
+          );
+
+          if (isWin) {
             projectedWins++;
           } else {
             projectedLosses++;
@@ -48,13 +60,14 @@ router.get('/', optionalAuth, (req, res) => {
         }
       }
 
+      const totalScheduled = teamSchedules.length || 12;
       return {
         ...team,
-        totalGamesScheduled: teamSchedules.length || 12,
+        totalGamesScheduled: totalScheduled,
         projectedRecord: {
           wins: projectedWins,
           losses: projectedLosses,
-          unpicked: Math.max(0, (teamSchedules.length || 12) - (projectedWins + projectedLosses))
+          unpicked: Math.max(0, totalScheduled - (projectedWins + projectedLosses))
         }
       };
     });
@@ -92,20 +105,28 @@ router.get('/:id/schedule', optionalAuth, (req, res) => {
 
     const now = new Date();
 
+    const tName = (team.name || '').toLowerCase();
+    const tNick = (team.nickname || '').toLowerCase();
+    const tAbbr = (team.abbreviation || '').toLowerCase();
+    const tId = (team.id || '').toLowerCase();
+
     const scheduleList = schedules.map(s => {
       const userPick = userPicksMap.get(s.game_id) || null;
       let userPrediction = null;
 
       if (userPick) {
         const pickedName = (userPick.predicted_winner_name || '').toLowerCase();
-        const tName = team.name.toLowerCase();
-        const tAbbr = team.abbreviation.toLowerCase();
+        const pickedId = (userPick.predicted_winner_id || '').toLowerCase();
 
-        if (pickedName.includes(tName) || pickedName === tAbbr || userPick.predicted_winner_id === team.id) {
-          userPrediction = 'WIN';
-        } else {
-          userPrediction = 'LOSS';
-        }
+        const isWin = (
+          pickedId === tId ||
+          (tId && pickedId.includes(tId)) ||
+          (pickedName && tName && (pickedName.includes(tName) || tName.includes(pickedName))) ||
+          (tNick && pickedName.includes(tNick)) ||
+          (tAbbr && pickedName === tAbbr)
+        );
+
+        userPrediction = isWin ? 'WIN' : 'LOSS';
       }
 
       const gameDate = new Date(s.game_date);

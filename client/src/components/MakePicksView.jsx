@@ -44,7 +44,10 @@ export function MakePicksView() {
     return (
       <TeamScheduleView
         team={selectedTeam}
-        onBack={() => setSelectedTeam(null)}
+        onBack={() => {
+          setSelectedTeam(null);
+          loadTeams();
+        }}
         onPickChanged={() => {
           loadTeams();
         }}
