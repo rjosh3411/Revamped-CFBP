@@ -37,15 +37,20 @@ export function RankingsView({ onSync, isSyncing }) {
       <div className="bg-gradient-to-r from-slate-900 via-amber-950/20 to-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center space-x-2 text-amber-400 text-xs font-bold uppercase tracking-wider mb-1">
-              <Award className="w-4 h-4" />
-              <span>Official NCAA Football Polls</span>
+            <div className="flex flex-wrap items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider mb-1">
+              <span className="flex items-center space-x-1">
+                <Award className="w-4 h-4" />
+                <span>Official NCAA Football Polls</span>
+              </span>
+              <span className="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                ● Auto-Syncs Every Monday
+              </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white font-display uppercase tracking-wide">
               {currentPoll?.name || 'AP Top 25 College Football Rankings'}
             </h1>
             <p className="text-xs text-slate-400 mt-0.5">
-              {currentPoll?.headline || 'Official live AP Poll rankings synced with ESPN'}
+              {currentPoll?.headline || 'Official live AP Poll rankings synced in real time with ESPN'}
             </p>
           </div>
 

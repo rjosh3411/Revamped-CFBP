@@ -1,4 +1,5 @@
 const db = require('../db/database');
+const { TEAMS_2026 } = require('../db/teamsData');
 
 const CONFERENCE_GROUPS = {
   ALL: 80,         // All FBS
@@ -341,7 +342,11 @@ class EspnService {
     const cacheKey = 'cfb_rankings';
     const cached = this.memoryCache.get(cacheKey);
 
-    if (!forceRefresh && cached && (Date.now() - cached.timestamp < 10 * 60 * 1000)) {
+    // Dynamic cache expiration: 10 minutes on Mondays when AP releases, 30 mins otherwise
+    const dayOfWeek = new Date().getDay(); // 1 = Monday
+    const cacheDuration = dayOfWeek === 1 ? (10 * 60 * 1000) : (30 * 60 * 1000);
+
+    if (!forceRefresh && cached && (Date.now() - cached.timestamp < cacheDuration)) {
       return cached.data;
     }
 
@@ -352,6 +357,7 @@ class EspnService {
       const normalizedRankings = this.normalizeRankings(data);
 
       await this.saveRankingsToDb(normalizedRankings);
+      this.syncTeamRankings(normalizedRankings);
 
       this.memoryCache.set(cacheKey, { timestamp: Date.now(), data: normalizedRankings });
       return normalizedRankings;
@@ -364,6 +370,20 @@ class EspnService {
       const fallback = this.generateFallbackRankings();
       await this.saveRankingsToDb(fallback);
       return fallback;
+    }
+  }
+
+  syncTeamRankings(polls) {
+    const apPoll = polls.find(p => p.name?.includes('AP') || p.type === 'ap') || polls[0];
+    if (!apPoll || !apPoll.ranks) return;
+
+    for (const r of apPoll.ranks) {
+      const teamId = r.team?.id;
+      const teamName = (r.team?.displayName || r.team?.name || '').toLowerCase();
+      const match = TEAMS_2026.find(t => t.id === teamId || t.name.toLowerCase().includes(teamName) || teamName.includes(t.name.toLowerCase()));
+      if (match) {
+        match.ranking = r.rank;
+      }
     }
   }
 
