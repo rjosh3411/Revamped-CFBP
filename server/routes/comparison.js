@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
-const espnService = require('../services/espnService');
+const { TEAMS_2026 } = require('../db/teamsData');
+const { calculateBettingLine } = require('../services/oddsService');
 const { authenticateToken } = require('../middleware/auth');
 
 // GET /api/comparison/party/:partyId
@@ -12,7 +13,12 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
     const week = parseInt(req.query.week || 1, 10);
     const buddyId = req.query.buddyId;
 
-    // Check party membership
+    // Check party membership & details
+    const party = await db.prepare('SELECT * FROM parties WHERE id = ?').get(partyId);
+    if (!party) {
+      return res.status(404).json({ error: 'Party not found' });
+    }
+
     const isMember = await db.prepare('SELECT id FROM party_members WHERE party_id = ? AND user_id = ?').get(partyId, req.user.id);
     if (!isMember) {
       return res.status(403).json({ error: 'You are not a member of this party' });
@@ -37,6 +43,36 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
 
     const buddies = members.filter(m => m.id !== req.user.id);
 
+    // If alone in party (no other buddies), return empty comparisons with party metadata
+    if (buddies.length === 0) {
+      return res.json({
+        partyId,
+        party,
+        year,
+        week,
+        currentUser: {
+          id: req.user.id,
+          displayName: req.user.display_name,
+          avatarUrl: req.user.avatar_url,
+          favoriteTeam: req.user.favorite_team,
+          weeklyPoints: 0
+        },
+        buddies: [],
+        selectedBuddy: null,
+        summary: {
+          totalGames: 0,
+          totalCompared: 0,
+          agreedCount: 0,
+          disagreedCount: 0,
+          agreementRate: 0,
+          myWeeklyPoints: 0,
+          buddyWeeklyPoints: 0,
+          pointDifferential: 0
+        },
+        comparisons: []
+      });
+    }
+
     let selectedBuddy = null;
     if (buddyId) {
       selectedBuddy = buddies.find(b => b.id === buddyId) || null;
@@ -45,9 +81,91 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
       selectedBuddy = buddies[0];
     }
 
-    // Fetch games for the week
-    const scoreboard = await espnService.getScoreboard({ year, week });
-    const games = scoreboard.games || [];
+    // Fetch verified 2026 schedules for this week
+    const weekSchedules = await db.prepare(`
+      SELECT * FROM team_schedules 
+      WHERE (season_year = 2026 OR season_year = '2026') AND week_number = ?
+      ORDER BY game_date ASC
+    `).all(week);
+
+    // Group schedules by game_id to construct complete 2026 matchups
+    const gamesMap = new Map();
+    for (const s of weekSchedules) {
+      if (!gamesMap.has(s.game_id)) {
+        const teamObj = TEAMS_2026.find(t => t.id === s.team_id) || {
+          id: s.team_id,
+          name: s.team_id.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          logoUrl: `https://a.espncdn.com/i/teamlogos/ncaa/500/${s.team_id}.png`,
+          ranking: null,
+          colors: { primary: '#1e3a8a' }
+        };
+
+        const oppObj = TEAMS_2026.find(t => t.name.toLowerCase() === s.opponent_name.toLowerCase() || t.id === s.opponent_name.toLowerCase().replace(/\s+/g, '-')) || {
+          id: s.opponent_name.toLowerCase().replace(/\s+/g, '-'),
+          name: s.opponent_name,
+          logoUrl: s.opponent_logo || `https://a.espncdn.com/i/teamlogos/ncaa/500/7.png`,
+          ranking: s.opponent_rank || null,
+          colors: { primary: '#991b1b' }
+        };
+
+        const homeTeam = s.is_home === 1 ? {
+          id: teamObj.id,
+          name: teamObj.name,
+          logo: teamObj.logoUrl,
+          rank: teamObj.ranking,
+          score: s.team_score || 0
+        } : {
+          id: oppObj.id,
+          name: oppObj.name,
+          logo: oppObj.logoUrl,
+          rank: oppObj.ranking,
+          score: s.opponent_score || 0
+        };
+
+        const awayTeam = s.is_home === 1 ? {
+          id: oppObj.id,
+          name: oppObj.name,
+          logo: oppObj.logoUrl,
+          rank: oppObj.ranking,
+          score: s.opponent_score || 0
+        } : {
+          id: teamObj.id,
+          name: teamObj.name,
+          logo: teamObj.logoUrl,
+          rank: teamObj.ranking,
+          score: s.team_score || 0
+        };
+
+        const odds = calculateBettingLine({
+          homeTeamName: homeTeam.name,
+          homeRank: homeTeam.rank,
+          awayTeamName: awayTeam.name,
+          awayRank: awayTeam.rank,
+          isHome: true
+        });
+
+        gamesMap.set(s.game_id, {
+          id: s.game_id,
+          seasonYear: year,
+          weekNumber: week,
+          date: s.game_date,
+          name: `${awayTeam.name} at ${homeTeam.name}`,
+          shortName: `${awayTeam.name} @ ${homeTeam.name}`,
+          status: s.status,
+          statusDetail: s.status_detail,
+          isFinal: s.status === 'STATUS_FINAL',
+          isInProgress: s.status === 'STATUS_IN_PROGRESS',
+          winnerId: null,
+          broadcast: s.broadcast || 'ESPN',
+          venue: s.venue_name || 'College Stadium',
+          odds,
+          homeTeam,
+          awayTeam
+        });
+      }
+    }
+
+    const allWeekGames = Array.from(gamesMap.values());
 
     // Fetch current user picks
     const myPicks = await db.prepare(`
@@ -91,7 +209,15 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
     let myWeeklyPoints = 0;
     let buddyWeeklyPoints = 0;
 
-    const gameComparisons = games.map(g => {
+    // Filter games to either games that have picks by party members OR all scheduled 2026 games
+    const gamesWithPicks = allWeekGames.filter(g => {
+      return myPicksMap.has(g.id) || (selectedBuddy && buddyPicksMap.has(g.id)) || partyPicksByGame.has(g.id);
+    });
+
+    // If no picks made yet, show top scheduled games for the week
+    const targetGames = gamesWithPicks.length > 0 ? gamesWithPicks : allWeekGames.slice(0, 15);
+
+    const gameComparisons = targetGames.map(g => {
       const myPick = myPicksMap.get(g.id) || null;
       const buddyPick = selectedBuddy ? (buddyPicksMap.get(g.id) || null) : null;
       const allPicksForGame = partyPicksByGame.get(g.id) || [];
@@ -101,7 +227,10 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
 
       if (myPick && buddyPick) {
         totalCompared++;
-        if (myPick.predicted_winner_id === buddyPick.predicted_winner_id) {
+        const myWinner = (myPick.predicted_winner_name || myPick.predicted_winner_id || '').toLowerCase();
+        const buddyWinner = (buddyPick.predicted_winner_name || buddyPick.predicted_winner_id || '').toLowerCase();
+
+        if (myWinner === buddyWinner || myPick.predicted_winner_id === buddyPick.predicted_winner_id) {
           comparisonStatus = 'AGREED';
           agreedCount++;
         } else {
@@ -131,8 +260,16 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
         buddyWeeklyPoints += buddyPick.points_awarded;
       }
 
-      const homePicksCount = allPicksForGame.filter(p => p.predicted_winner_id === g.homeTeam.id).length;
-      const awayPicksCount = allPicksForGame.filter(p => p.predicted_winner_id === g.awayTeam.id).length;
+      const homePicksCount = allPicksForGame.filter(p => {
+        const pName = (p.predicted_winner_name || '').toLowerCase();
+        return p.predicted_winner_id === g.homeTeam.id || pName.includes(g.homeTeam.name.toLowerCase());
+      }).length;
+
+      const awayPicksCount = allPicksForGame.filter(p => {
+        const pName = (p.predicted_winner_name || '').toLowerCase();
+        return p.predicted_winner_id === g.awayTeam.id || pName.includes(g.awayTeam.name.toLowerCase());
+      }).length;
+
       const totalPartyPicks = homePicksCount + awayPicksCount;
 
       const consensus = {
@@ -164,6 +301,7 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
 
     return res.json({
       partyId,
+      party,
       year,
       week,
       currentUser: {
@@ -182,7 +320,7 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
         weeklyPoints: buddyWeeklyPoints
       } : null,
       summary: {
-        totalGames: games.length,
+        totalGames: targetGames.length,
         totalCompared,
         agreedCount,
         disagreedCount,
