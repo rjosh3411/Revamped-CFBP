@@ -64,8 +64,8 @@ router.post('/login', async (req, res) => {
 
     const user = db.prepare(`
       SELECT * FROM users 
-      WHERE email = ? OR username = ?
-    `).get(login.toLowerCase(), login.toLowerCase());
+      WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)
+    `).get(login.trim(), login.trim());
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials. Please check your username/email.' });

@@ -44,8 +44,8 @@ function initSchema() {
     -- Users Table (Persistent accounts)
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
-      email TEXT UNIQUE NOT NULL,
-      username TEXT UNIQUE NOT NULL,
+      email TEXT UNIQUE NOT NULL COLLATE NOCASE,
+      username TEXT UNIQUE NOT NULL COLLATE NOCASE,
       password_hash TEXT NOT NULL,
       display_name TEXT NOT NULL,
       favorite_team TEXT DEFAULT 'Georgia Bulldogs',
