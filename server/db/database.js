@@ -28,15 +28,22 @@ if (isServerless && !fs.existsSync(dbPath) && fs.existsSync(bundledDbPath)) {
   }
 }
 
-const db = new Database(dbPath);
-
-// Enable pragmas
-if (isServerless) {
-  db.pragma('journal_mode = MEMORY');
-} else {
-  db.pragma('journal_mode = WAL');
+let db;
+try {
+  db = new Database(dbPath, { timeout: 7000 });
+  if (isServerless) {
+    db.pragma('journal_mode = MEMORY');
+    db.pragma('temp_store = MEMORY');
+    db.pragma('synchronous = OFF');
+  } else {
+    db.pragma('journal_mode = WAL');
+  }
+  db.pragma('foreign_keys = ON');
+} catch (err) {
+  console.warn('Fallback to in-memory SQLite database:', err.message);
+  db = new Database(':memory:');
+  db.pragma('foreign_keys = ON');
 }
-db.pragma('foreign_keys = ON');
 
 // Initialize database schema
 function initSchema() {
