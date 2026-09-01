@@ -1,41 +1,15 @@
 {
-  "version": 2,
-  "builds": [
+  "buildCommand": "npm run build --prefix client",
+  "outputDirectory": "client/dist",
+  "framework": "vite",
+  "rewrites": [
     {
-      "src": "server/index.js",
-      "use": "@vercel/node"
+      "source": "/api/(.*)",
+      "destination": "/api/index.js"
     },
     {
-      "src": "client/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/server/index.js"
-    },
-    {
-      "src": "/evolution/(.*)",
-      "dest": "/client/dist/evolution/$1"
-    },
-    {
-      "src": "/assets/(.*)",
-      "dest": "/client/dist/assets/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/client/dist/$1"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/.*",
-      "dest": "/client/dist/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
