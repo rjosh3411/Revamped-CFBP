@@ -13,6 +13,7 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
   const [loading, setLoading] = useState(true);
   // Map of gameId -> confidence level (1=Low🤷, 2=Medium👍, 3=High🔥, null=unset)
   const [confidenceLevels, setConfidenceLevels] = useState({});
+  const [mascotBounce, setMascotBounce] = useState(false);
 
   useEffect(() => {
     if (team) {
@@ -80,6 +81,10 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
       }));
 
       onPickChanged && onPickChanged();
+
+      // Trigger mascot peeking bounce animation
+      setMascotBounce(true);
+      setTimeout(() => setMascotBounce(false), 600);
 
       if (isWin) {
         try {
@@ -175,16 +180,90 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
             </div>
           </div>
 
-          {/* User Projected Record Badge */}
-          <div className="bg-black/70 p-3.5 rounded-2xl border border-white/10 text-center min-w-[140px]">
-            <div className="text-[10px] uppercase font-bold text-[#9a978a]">Your 2026 Projection</div>
-            <div className="text-2xl font-black text-[#faf6e8] font-mono mt-0.5">
-              <span className="text-[#86efac]">{winCount}</span> - <span className="text-[#fca5a5]">{lossCount}</span>
-            </div>
-            <div className="text-[10px] text-[#9a978a] mt-0.5">
-              {unpickedCount > 0 ? `${unpickedCount} games unpicked` : 'All games picked!'}
-            </div>
-          </div>
+          {/* User Projected Record Badge with Peeking Mascot */}
+          {(() => {
+            const totalPicked = winCount + lossCount;
+            let mascotMood = 'CURIOUS';
+            if (winCount >= 10) {
+              mascotMood = 'HYPE';
+            } else if (winCount >= 6 && winCount >= lossCount) {
+              mascotMood = 'CONFIDENT';
+            } else if (lossCount > winCount && lossCount >= 3) {
+              mascotMood = 'NERVOUS';
+            } else if (totalPicked > 0 && winCount > lossCount) {
+              mascotMood = 'CONFIDENT';
+            }
+
+            return (
+              <div className="relative pt-7 min-w-[155px] self-center sm:self-auto">
+                {/* Dynamic Peeking Mascot Container */}
+                <div 
+                  className={`absolute left-1/2 -translate-x-1/2 z-0 pointer-events-none transition-all duration-500 ease-out flex flex-col items-center ${
+                    mascotBounce ? 'animate-mascot-peek' : ''
+                  } ${
+                    mascotMood === 'HYPE'
+                      ? '-top-6 scale-110'
+                      : mascotMood === 'CONFIDENT'
+                        ? '-top-4 scale-100'
+                        : mascotMood === 'NERVOUS'
+                          ? '-top-1 scale-90 opacity-80 animate-mascot-nervous'
+                          : '-top-3 scale-95 opacity-90'
+                  }`}
+                >
+                  {/* Mood Floating Badge */}
+                  <div className="text-xs mb-0.5 filter drop-shadow select-none">
+                    {mascotMood === 'HYPE' && <span className="animate-pulse">🔥</span>}
+                    {mascotMood === 'CONFIDENT' && <span>👍</span>}
+                    {mascotMood === 'NERVOUS' && <span>💧</span>}
+                    {mascotMood === 'CURIOUS' && <span>👀</span>}
+                  </div>
+
+                  {/* Mascot Head */}
+                  <div className="relative">
+                    <img
+                      src={team.logoUrl}
+                      alt={`${team.name} Mascot`}
+                      className={`w-11 h-11 object-contain drop-shadow-xl transition-all ${
+                        mascotMood === 'HYPE' ? 'animate-mascot-hype' : ''
+                      }`}
+                      onError={(e) => { e.target.src = 'https://a.espncdn.com/i/teamlogos/ncaa/500/7.png'; }}
+                    />
+                  </div>
+
+                  {/* Mascot Paws Resting On Top Border */}
+                  <div className="flex items-center justify-between w-9 -mt-1 z-20">
+                    <div 
+                      className="w-2.5 h-2 rounded-t-full shadow-sm border-t border-x"
+                      style={{ 
+                        backgroundColor: team.colors?.primary || '#faf6e8', 
+                        borderColor: 'rgba(255,255,255,0.4)' 
+                      }}
+                    />
+                    <div 
+                      className="w-2.5 h-2 rounded-t-full shadow-sm border-t border-x"
+                      style={{ 
+                        backgroundColor: team.colors?.primary || '#faf6e8', 
+                        borderColor: 'rgba(255,255,255,0.4)' 
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Projection Card Box */}
+                <div className="relative z-10 bg-black/85 p-3.5 rounded-2xl border border-white/15 text-center shadow-2xl backdrop-blur-md">
+                  <div className="text-[10px] uppercase font-bold text-[#9a978a] tracking-wider">Your 2026 Projection</div>
+                  <div className="text-2xl font-black text-[#faf6e8] font-mono mt-0.5 flex items-center justify-center space-x-1.5">
+                    <span className="text-[#86efac]">{winCount}W</span>
+                    <span className="text-[#9a978a] font-light">-</span>
+                    <span className="text-[#fca5a5]">{lossCount}L</span>
+                  </div>
+                  <div className="text-[10px] text-[#9a978a] mt-0.5">
+                    {unpickedCount > 0 ? `${unpickedCount} games unpicked` : 'All games picked!'}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
