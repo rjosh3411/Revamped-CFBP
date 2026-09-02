@@ -79,13 +79,13 @@ export function AuthModal() {
           <X className="w-4 h-4" />
         </button>
 
-        {/* Header with Football Glow */}
+        {/* Header with Flying Football & Easy Blue Square Badge */}
         <div className="text-center mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 mx-auto flex items-center justify-center text-2xl shadow-lg shadow-amber-500/20 mb-3">
-            🏈
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600 mx-auto flex items-center justify-center shadow-lg shadow-blue-500/30 border border-sky-300/30 mb-3 overflow-visible">
+            <span className="animate-football-flyin text-3xl select-none">🏈</span>
           </div>
-          <h2 className="text-2xl font-black text-white uppercase tracking-wide font-display">
-            {mode === 'login' ? 'Welcome Back!' : 'Join CFB Prediction Party'}
+          <h2 className="text-3xl font-black text-white uppercase tracking-wider font-display drop-shadow">
+            {mode === 'login' ? "Pick'em" : "Pick'em Account"}
           </h2>
           <p className="text-xs text-slate-400 mt-1">
             {mode === 'login'
@@ -94,8 +94,8 @@ export function AuthModal() {
           </p>
 
           {/* Guaranteed Persistence Badge */}
-          <div className="mt-3 inline-flex items-center space-x-1.5 bg-emerald-950/60 border border-emerald-500/40 text-emerald-400 text-[11px] font-semibold px-3 py-1 rounded-full">
-            <ShieldCheck className="w-3.5 h-3.5" />
+          <div className="mt-3 inline-flex items-center space-x-1.5 bg-sky-950/60 border border-sky-500/40 text-sky-300 text-[11px] font-semibold px-3 py-1 rounded-full">
+            <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
             <span>Permanent Cloud Storage • Never Loses Your Picks</span>
           </div>
         </div>
@@ -105,9 +105,9 @@ export function AuthModal() {
           <button
             type="button"
             onClick={() => { setMode('login'); setError(''); }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
+            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 ${
               mode === 'login'
-                ? 'bg-amber-500 text-slate-950 shadow font-black'
+                ? 'bg-gradient-to-r from-sky-400 to-blue-500 text-slate-950 shadow-md font-black'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -116,9 +116,9 @@ export function AuthModal() {
           <button
             type="button"
             onClick={() => { setMode('register'); setError(''); }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
+            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 ${
               mode === 'register'
-                ? 'bg-amber-500 text-slate-950 shadow font-black'
+                ? 'bg-gradient-to-r from-sky-400 to-blue-500 text-slate-950 shadow-md font-black'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -144,7 +144,7 @@ export function AuthModal() {
                 placeholder="coach@football.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-slate-950 text-white pl-9 pr-3 py-2.5 rounded-xl border border-slate-800 focus:border-amber-400 focus:outline-none"
+                className="w-full bg-slate-950 text-white pl-9 pr-3 py-2.5 rounded-xl border border-slate-800 focus:border-sky-400 focus:ring-1 focus:ring-sky-400/40 focus:outline-none"
               />
               <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
             </div>
@@ -162,7 +162,7 @@ export function AuthModal() {
                       placeholder="GridironKing"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      className="w-full bg-slate-950 text-white pl-8 pr-2 py-2.5 rounded-xl border border-slate-800 focus:border-amber-400 focus:outline-none"
+                      className="w-full bg-slate-950 text-white pl-8 pr-2 py-2.5 rounded-xl border border-slate-800 focus:border-sky-400 focus:ring-1 focus:ring-sky-400/40 focus:outline-none"
                     />
                     <User className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-3" />
                   </div>
@@ -175,7 +175,7 @@ export function AuthModal() {
                     placeholder="Coach Steve"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full bg-slate-950 text-white px-3 py-2.5 rounded-xl border border-slate-800 focus:border-amber-400 focus:outline-none"
+                    className="w-full bg-slate-950 text-white px-3 py-2.5 rounded-xl border border-slate-800 focus:border-sky-400 focus:ring-1 focus:ring-sky-400/40 focus:outline-none"
                   />
                 </div>
               </div>
@@ -186,7 +186,7 @@ export function AuthModal() {
                   <select
                     value={favoriteTeam}
                     onChange={(e) => setFavoriteTeam(e.target.value)}
-                    className="w-full bg-slate-950 text-white pl-8 pr-3 py-2.5 rounded-xl border border-slate-800 focus:border-amber-400 focus:outline-none font-medium"
+                    className="w-full bg-slate-950 text-white pl-8 pr-3 py-2.5 rounded-xl border border-slate-800 focus:border-sky-400 focus:ring-1 focus:ring-sky-400/40 focus:outline-none font-medium"
                   >
                     {POPULAR_TEAMS.map(team => (
                       <option key={team} value={team}>{team}</option>
@@ -207,7 +207,7 @@ export function AuthModal() {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-slate-950 text-white pl-9 pr-3 py-2.5 rounded-xl border border-slate-800 focus:border-amber-400 focus:outline-none"
+                className="w-full bg-slate-950 text-white pl-9 pr-3 py-2.5 rounded-xl border border-slate-800 focus:border-sky-400 focus:ring-1 focus:ring-sky-400/40 focus:outline-none"
               />
               <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
             </div>
@@ -216,7 +216,7 @@ export function AuthModal() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full mt-2 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm rounded-xl shadow-lg shadow-amber-500/20 transition disabled:opacity-50"
+            className="w-full mt-2 py-3 bg-gradient-to-r from-sky-400 via-blue-500 to-blue-600 hover:from-sky-300 hover:to-blue-500 text-slate-950 font-black text-sm rounded-xl shadow-lg shadow-blue-500/25 transition disabled:opacity-50"
           >
             {submitting ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Permanent Account'}
           </button>
