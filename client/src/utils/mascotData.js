@@ -490,20 +490,41 @@ export const MASCOT_REGISTRY = {
 };
 
 export const REAL_MASCOT_PHOTOS = {
+  // SEC
   'georgia': '/mascots/georgia.jpg',
-  'ohio-state': '/mascots/ohio-state.jpg',
-  'oregon': '/mascots/oregon.jpg',
   'alabama': '/mascots/alabama.jpg',
   'texas': '/mascots/texas.jpg',
   'florida': '/mascots/florida.jpg',
   'lsu': '/mascots/lsu.jpg',
   'tennessee': '/mascots/tennessee.jpg',
-  'notre-dame': '/mascots/notre-dame.jpg',
-  'miami': '/mascots/miami.jpg',
-  'usc': '/mascots/usc.jpg',
+  'auburn': '/mascots/auburn.jpg',
+  'oklahoma': '/mascots/oklahoma.jpg',
+  'texas-am': '/mascots/texas-am.jpg',
+  'south-carolina': '/mascots/south-carolina.jpg',
+  'arkansas': '/mascots/arkansas.jpg',
+  'kentucky': '/mascots/kentucky.jpg',
+
+  // Big Ten
+  'ohio-state': '/mascots/ohio-state.jpg',
+  'oregon': '/mascots/oregon.jpg',
+  'michigan': '/mascots/michigan.jpg',
+  'penn-state': '/mascots/penn-state.jpg',
   'wisconsin': '/mascots/wisconsin.jpg',
+  'usc': '/mascots/usc.jpg',
+  'michigan-state': '/mascots/michigan-state.jpg',
+  'washington': '/mascots/washington.jpg',
+  'iowa': '/mascots/iowa.jpg',
+
+  // ACC
+  'clemson': '/mascots/clemson.jpg',
   'florida-state': '/mascots/florida-state.jpg',
-  'michigan': '/mascots/michigan.jpg'
+  'miami': '/mascots/miami.jpg',
+
+  // Big 12
+  'colorado': '/mascots/colorado.jpg',
+
+  // Independents
+  'notre-dame': '/mascots/notre-dame.jpg'
 };
 
 /**
