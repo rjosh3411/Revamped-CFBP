@@ -272,4 +272,47 @@ router.post('/:id/messages', authenticateToken, async (req, res) => {
   }
 });
 
+// POST /api/parties/:id/sync-picks
+// Syncs and brings over all user predictions and stats into this party
+router.post('/:id/sync-picks', authenticateToken, async (req, res) => {
+  try {
+    const partyId = req.params.id;
+
+    // Verify user is a member
+    const membership = await db.prepare('SELECT * FROM party_members WHERE party_id = ? AND user_id = ?').get(partyId, req.user.id);
+    if (!membership) {
+      return res.status(403).json({ error: 'You must be a member of this party to sync picks' });
+    }
+
+    // Count user's total picks, wins, and confidence points
+    const picksCountRes = await db.prepare('SELECT COUNT(*) as total FROM picks WHERE user_id = ?').get(req.user.id);
+    const totalPicks = picksCountRes?.total || 0;
+
+    const correctPicksRes = await db.prepare('SELECT COUNT(*) as correct FROM picks WHERE user_id = ? AND is_correct = 1').get(req.user.id);
+    const correctPicks = correctPicksRes?.correct || 0;
+
+    const pointsRes = await db.prepare('SELECT COALESCE(SUM(points_awarded), 0) as points FROM picks WHERE user_id = ?').get(req.user.id);
+    const totalPoints = pointsRes?.points || 0;
+
+    // Update users table to ensure parity
+    await db.prepare('UPDATE users SET total_picks = ?, correct_picks = ?, total_points = ? WHERE id = ?').run(
+      totalPicks,
+      correctPicks,
+      totalPoints,
+      req.user.id
+    );
+
+    return res.json({
+      success: true,
+      message: `🎉 All ${totalPicks} of your 2026 predictions are synced and active in this party!`,
+      totalPicks,
+      correctPicks,
+      totalPoints
+    });
+  } catch (err) {
+    console.error('Sync party picks error:', err);
+    return res.status(500).json({ error: 'Failed to sync party picks' });
+  }
+});
+
 module.exports = router;

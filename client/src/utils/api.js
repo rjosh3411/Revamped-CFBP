@@ -94,6 +94,9 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ message, type })
   }),
+  syncPartyPicks: (partyId) => request(`/parties/${encodeURIComponent(partyId)}/sync-picks`, {
+    method: 'POST'
+  }),
 
   // Buddy Comparison
   getBuddyComparison: (partyId, { year = 2026, week = 1, buddyId } = {}) => {

@@ -44,6 +44,8 @@ export function PartyHub({ parties, onPartyCreated, onPartyJoined, onPartyLeft, 
   const [loading, setLoading] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [leavingParty, setLeavingParty] = useState(false);
+  const [syncingPicks, setSyncingPicks] = useState(false);
+  const [syncFeedback, setSyncFeedback] = useState('');
 
   // Modals
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -55,6 +57,7 @@ export function PartyHub({ parties, onPartyCreated, onPartyJoined, onPartyLeft, 
   const [newPartyConf, setNewPartyConf] = useState('ALL');
   const [newPartyScoring, setNewPartyScoring] = useState('STRAIGHT_UP');
   const [newPartyIcon, setNewPartyIcon] = useState('🏈');
+  const [carryOverPicks, setCarryOverPicks] = useState(true);
   const [joinCode, setJoinCode] = useState('');
   const [formError, setFormError] = useState('');
 
@@ -124,6 +127,24 @@ export function PartyHub({ parties, onPartyCreated, onPartyJoined, onPartyLeft, 
     }
   };
 
+  const handleSyncPicks = async (partyId) => {
+    if (!partyId) return;
+    setSyncingPicks(true);
+    setSyncFeedback('');
+    try {
+      const res = await api.syncPartyPicks(partyId);
+      setSyncFeedback(res.message || 'All your 2026 picks are synced and active in this party!');
+      confetti({ particleCount: 35, spread: 60, origin: { y: 0.7 } });
+      await loadPartyInfo(partyId);
+      setTimeout(() => setSyncFeedback(''), 5000);
+    } catch (err) {
+      console.error('Failed to sync picks:', err);
+      alert('Failed to sync picks: ' + (err.message || 'Unknown error'));
+    } finally {
+      setSyncingPicks(false);
+    }
+  };
+
   const handleCreateParty = async (e) => {
     e.preventDefault();
     setFormError('');
@@ -147,6 +168,13 @@ export function PartyHub({ parties, onPartyCreated, onPartyJoined, onPartyLeft, 
         setNewPartyDesc('');
         onPartyCreated && onPartyCreated(res.party);
         setSelectedPartyId(res.party.id);
+
+        if (carryOverPicks) {
+          try {
+            await api.syncPartyPicks(res.party.id);
+          } catch (e) {}
+        }
+
         confetti({ particleCount: 50, spread: 70, origin: { y: 0.6 } });
       }
     } catch (err) {
@@ -169,6 +197,13 @@ export function PartyHub({ parties, onPartyCreated, onPartyJoined, onPartyLeft, 
         setJoinCode('');
         onPartyJoined && onPartyJoined(res.party);
         setSelectedPartyId(res.party.id);
+
+        if (carryOverPicks) {
+          try {
+            await api.syncPartyPicks(res.party.id);
+          } catch (e) {}
+        }
+
         confetti({ particleCount: 50, spread: 70, origin: { y: 0.6 } });
       }
     } catch (err) {
@@ -330,6 +365,42 @@ export function PartyHub({ parties, onPartyCreated, onPartyJoined, onPartyLeft, 
                 </button>
               </div>
             </div>
+
+            {/* Sync & Carry Over Picks Banner */}
+            <div className="mb-4 p-3 rounded-2xl bg-[#070b10] border border-amber-400/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-inner">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-400/30 flex items-center justify-center text-amber-400 font-bold flex-shrink-0">
+                  📥
+                </div>
+                <div>
+                  <div className="text-xs font-extrabold text-white flex items-center space-x-1.5">
+                    <span>Carry Over & Sync 2026 Predictions</span>
+                    <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-500/30 px-2 py-0.2 rounded-full">
+                      Active
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-[#9a978a]">
+                    Your season picks automatically populate into this party so you never lose or re-select picks.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => handleSyncPicks(currentParty.id)}
+                disabled={syncingPicks}
+                className="w-full sm:w-auto px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black transition flex items-center justify-center space-x-1.5 shadow"
+              >
+                <TrendingUp className={`w-3.5 h-3.5 ${syncingPicks ? 'animate-spin' : ''}`} />
+                <span>{syncingPicks ? 'Syncing...' : 'Sync My Picks'}</span>
+              </button>
+            </div>
+
+            {syncFeedback && (
+              <div className="mb-4 p-2.5 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-xs text-emerald-300 font-semibold animate-in fade-in flex items-center space-x-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                <span>{syncFeedback}</span>
+              </div>
+            )}
 
             {/* Standings Table */}
             <div className="overflow-x-auto">
@@ -569,6 +640,28 @@ export function PartyHub({ parties, onPartyCreated, onPartyJoined, onPartyLeft, 
                 </div>
               </div>
 
+              {/* Carry Over Existing Picks Option */}
+              <div 
+                onClick={() => setCarryOverPicks(prev => !prev)}
+                className="cursor-pointer p-3 rounded-xl bg-black/60 border border-white/10 hover:border-amber-400/40 transition flex items-start space-x-2.5"
+              >
+                <input
+                  type="checkbox"
+                  checked={carryOverPicks}
+                  onChange={(e) => setCarryOverPicks(e.target.checked)}
+                  className="mt-0.5 rounded accent-amber-500"
+                />
+                <div>
+                  <div className="font-bold text-white text-xs flex items-center space-x-1">
+                    <span>Bring Over My 2026 Predictions</span>
+                    <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 rounded">Recommended</span>
+                  </div>
+                  <p className="text-[10px] text-[#9a978a] mt-0.5 leading-tight">
+                    Automatically link all your existing 2026 game picks, confidence ratings, and projected records into this party so you don't lose them!
+                  </p>
+                </div>
+              </div>
+
               <div className="pt-3 flex space-x-2">
                 <button
                   type="button"
@@ -613,6 +706,28 @@ export function PartyHub({ parties, onPartyCreated, onPartyJoined, onPartyLeft, 
                   onChange={(e) => setJoinCode(e.target.value)}
                   className="w-full bg-black text-white p-3 rounded-xl border border-white/10 focus:border-amber-400 focus:outline-none font-mono text-center text-lg uppercase tracking-wider font-bold"
                 />
+              </div>
+
+              {/* Carry Over Existing Picks Option */}
+              <div 
+                onClick={() => setCarryOverPicks(prev => !prev)}
+                className="cursor-pointer p-3 rounded-xl bg-black/60 border border-white/10 hover:border-amber-400/40 transition flex items-start space-x-2.5"
+              >
+                <input
+                  type="checkbox"
+                  checked={carryOverPicks}
+                  onChange={(e) => setCarryOverPicks(e.target.checked)}
+                  className="mt-0.5 rounded accent-amber-500"
+                />
+                <div>
+                  <div className="font-bold text-white text-xs flex items-center space-x-1">
+                    <span>Bring Over My 2026 Predictions</span>
+                    <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 rounded">Recommended</span>
+                  </div>
+                  <p className="text-[10px] text-[#9a978a] mt-0.5 leading-tight">
+                    Automatically link all your existing 2026 game picks and standings to this new party.
+                  </p>
+                </div>
               </div>
 
               <div className="pt-2 flex space-x-2">
