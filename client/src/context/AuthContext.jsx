@@ -29,21 +29,24 @@ export function AuthProvider({ children }) {
         const res = await api.getMe();
         if (res?.user) {
           setUser(res.user);
+          setAuthModalOpen(false);
         } else {
           localStorage.removeItem('cfb_jwt_token');
           setUser(null);
+          setAuthMode('login');
+          setAuthModalOpen(true);
         }
-      } else if (demoRes?.demoUsers?.length > 0) {
-        // Auto-login as the first demo user (Coach Reed) if no active token exists
-        const coach = demoRes.demoUsers[0];
-        const switchRes = await api.switchDemoUser(coach.id);
-        if (switchRes?.token) {
-          localStorage.setItem('cfb_jwt_token', switchRes.token);
-          setUser(switchRes.user);
-        }
+      } else {
+        // No active token -> Require login on launch
+        setUser(null);
+        setAuthMode('login');
+        setAuthModalOpen(true);
       }
     } catch (err) {
       console.warn('Auth initialization error:', err);
+      setUser(null);
+      setAuthMode('login');
+      setAuthModalOpen(true);
     } finally {
       setLoading(false);
     }
@@ -72,6 +75,8 @@ export function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem('cfb_jwt_token');
     setUser(null);
+    setAuthMode('login');
+    setAuthModalOpen(true);
   };
 
   const updateProfile = async (data) => {

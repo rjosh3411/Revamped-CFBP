@@ -30,7 +30,7 @@ const POPULAR_TEAMS = [
 ];
 
 export function AuthModal() {
-  const { authModalOpen, authMode, closeAuth, login, register, openAuth } = useAuth();
+  const { user, authModalOpen, authMode, closeAuth, login, register, openAuth } = useAuth();
 
   const [mode, setMode] = useState(authMode || 'login');
   const [email, setEmail] = useState('');
@@ -40,6 +40,10 @@ export function AuthModal() {
   const [favoriteTeam, setFavoriteTeam] = useState('Georgia Bulldogs');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  React.useEffect(() => {
+    if (authMode) setMode(authMode);
+  }, [authMode]);
 
   if (!authModalOpen) return null;
 
@@ -71,13 +75,16 @@ export function AuthModal() {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
       <div className="bg-slate-900 border border-slate-700/80 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative overflow-hidden">
-        {/* Close Button */}
-        <button
-          onClick={closeAuth}
-          className="absolute top-5 right-5 p-1.5 rounded-full bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        {/* Close Button (only accessible if user is already logged in) */}
+        {user && (
+          <button
+            onClick={closeAuth}
+            className="absolute top-5 right-5 p-1.5 rounded-full bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition"
+            title="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
 
         {/* Header with Flying Football & Easy Blue Square Badge */}
         <div className="text-center mb-6">
