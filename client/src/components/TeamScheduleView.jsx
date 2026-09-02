@@ -213,13 +213,13 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
                             : '-top-4 scale-95 opacity-95'
                     }`}
                   >
-                    {/* Mascot Character Head (Real Costume Headshot Photo or SVG) */}
+                    {/* Mascot Character Head (True Transparent PNG Cutout or SVG) */}
                     {mascot.photoUrl ? (
-                      <div className="relative w-16 h-16 sm:w-18 sm:h-18 rounded-t-full overflow-hidden border-2 border-amber-400/60 shadow-2xl bg-black/50">
+                      <div className="relative w-20 h-20 sm:w-22 sm:h-22 flex items-end justify-center filter drop-shadow-[0_6px_12px_rgba(0,0,0,0.85)]">
                         <img
                           src={mascot.photoUrl}
                           alt={mascot.name}
-                          className="w-full h-full object-cover object-top filter contrast-105"
+                          className="max-w-full max-h-full object-contain filter contrast-105"
                         />
                       </div>
                     ) : (

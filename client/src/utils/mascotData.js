@@ -491,40 +491,40 @@ export const MASCOT_REGISTRY = {
 
 export const REAL_MASCOT_PHOTOS = {
   // SEC
-  'georgia': '/mascots/georgia.jpg',
-  'alabama': '/mascots/alabama.jpg',
-  'texas': '/mascots/texas.jpg',
-  'florida': '/mascots/florida.jpg',
-  'lsu': '/mascots/lsu.jpg',
-  'tennessee': '/mascots/tennessee.jpg',
-  'auburn': '/mascots/auburn.jpg',
-  'oklahoma': '/mascots/oklahoma.jpg',
-  'texas-am': '/mascots/texas-am.jpg',
-  'south-carolina': '/mascots/south-carolina.jpg',
-  'arkansas': '/mascots/arkansas.jpg',
-  'kentucky': '/mascots/kentucky.jpg',
+  'georgia': '/mascots/georgia.png',
+  'alabama': '/mascots/alabama.png',
+  'texas': '/mascots/texas.png',
+  'florida': '/mascots/florida.png',
+  'lsu': '/mascots/lsu.png',
+  'tennessee': '/mascots/tennessee.png',
+  'auburn': '/mascots/auburn.png',
+  'oklahoma': '/mascots/oklahoma.png',
+  'texas-am': '/mascots/texas-am.png',
+  'south-carolina': '/mascots/south-carolina.png',
+  'arkansas': '/mascots/arkansas.png',
+  'kentucky': '/mascots/kentucky.png',
 
   // Big Ten
-  'ohio-state': '/mascots/ohio-state.jpg',
-  'oregon': '/mascots/oregon.jpg',
-  'michigan': '/mascots/michigan.jpg',
-  'penn-state': '/mascots/penn-state.jpg',
-  'wisconsin': '/mascots/wisconsin.jpg',
-  'usc': '/mascots/usc.jpg',
-  'michigan-state': '/mascots/michigan-state.jpg',
-  'washington': '/mascots/washington.jpg',
-  'iowa': '/mascots/iowa.jpg',
+  'ohio-state': '/mascots/ohio-state.png',
+  'oregon': '/mascots/oregon.png',
+  'michigan': '/mascots/michigan.png',
+  'penn-state': '/mascots/penn-state.png',
+  'wisconsin': '/mascots/wisconsin.png',
+  'usc': '/mascots/usc.png',
+  'michigan-state': '/mascots/michigan-state.png',
+  'washington': '/mascots/washington.png',
+  'iowa': '/mascots/iowa.png',
 
   // ACC
-  'clemson': '/mascots/clemson.jpg',
-  'florida-state': '/mascots/florida-state.jpg',
-  'miami': '/mascots/miami.jpg',
+  'clemson': '/mascots/clemson.png',
+  'florida-state': '/mascots/florida-state.png',
+  'miami': '/mascots/miami.png',
 
   // Big 12
-  'colorado': '/mascots/colorado.jpg',
+  'colorado': '/mascots/colorado.png',
 
   // Independents
-  'notre-dame': '/mascots/notre-dame.jpg'
+  'notre-dame': '/mascots/notre-dame.png'
 };
 
 /**
