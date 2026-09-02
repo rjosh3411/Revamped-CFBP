@@ -213,12 +213,6 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
                             : '-top-4 scale-95 opacity-95'
                     }`}
                   >
-                    {/* Mood Floating Badge & Mascot Name Tooltip */}
-                    <div className="text-[11px] font-black mb-0.5 filter drop-shadow select-none flex items-center space-x-1 bg-black/60 px-2 py-0.5 rounded-full border border-white/10 text-amber-300">
-                      <span>{mascotMood === 'HYPE' ? '🔥' : mascotMood === 'CONFIDENT' ? '👍' : mascotMood === 'NERVOUS' ? '💧' : '👀'}</span>
-                      <span className="text-[9px] font-sans font-bold text-white max-w-[90px] truncate">{mascot.name}</span>
-                    </div>
-
                     {/* Mascot Character Head (Real Costume Headshot Photo or SVG) */}
                     {mascot.photoUrl ? (
                       <div className="relative w-16 h-16 sm:w-18 sm:h-18 rounded-t-full overflow-hidden border-2 border-amber-400/60 shadow-2xl bg-black/50">
