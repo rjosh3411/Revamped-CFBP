@@ -257,16 +257,62 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
                   </div>
                 )}
 
-                {/* Projection Card Box */}
-                <div className="relative z-10 bg-black/85 p-3.5 rounded-2xl border border-white/15 text-center shadow-2xl backdrop-blur-md">
+                {/* Projection Card Box with 12-Segment Progress Bar & Milestones */}
+                <div className="relative z-10 bg-black/85 p-3.5 rounded-2xl border border-white/15 text-center shadow-2xl backdrop-blur-md min-w-[175px]">
                   <div className="text-[10px] uppercase font-bold text-[#9a978a] tracking-wider">Your 2026 Projection</div>
+                  
+                  {/* Record Numbers */}
                   <div className="text-2xl font-black text-[#faf6e8] font-mono mt-0.5 flex items-center justify-center space-x-1.5">
                     <span className="text-[#86efac]">{winCount}W</span>
                     <span className="text-[#9a978a] font-light">-</span>
                     <span className="text-[#fca5a5]">{lossCount}L</span>
                   </div>
-                  <div className="text-[10px] text-[#9a978a] mt-0.5">
-                    {unpickedCount > 0 ? `${unpickedCount} games unpicked` : 'All games picked!'}
+
+                  {/* 12-Game Season Segmented Progress Bar */}
+                  <div className="flex items-center justify-center gap-1 my-2 px-1">
+                    {Array.from({ length: 12 }).map((_, idx) => {
+                      const game = scheduleData[idx];
+                      const isWin = game?.userPrediction === 'WIN';
+                      const isLoss = game?.userPrediction === 'LOSS';
+                      return (
+                        <div
+                          key={idx}
+                          className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+                            isWin
+                              ? 'bg-[#86efac] shadow-[0_0_8px_rgba(134,239,172,0.6)]'
+                              : isLoss
+                                ? 'bg-[#fca5a5] shadow-[0_0_8px_rgba(252,165,165,0.6)]'
+                                : 'bg-white/10'
+                          }`}
+                          title={`Game ${idx + 1}: ${isWin ? 'Win' : isLoss ? 'Loss' : 'Unpicked'}`}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  {/* Dynamic Milestone Badge */}
+                  <div className="mt-1">
+                    {winCount === 12 ? (
+                      <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-500 to-yellow-300 text-black shadow-md animate-pulse">
+                        <span>👑 Undefeated Season</span>
+                      </span>
+                    ) : winCount >= 10 ? (
+                      <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/40">
+                        <span>🏆 CFP Contender</span>
+                      </span>
+                    ) : winCount >= 6 ? (
+                      <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                        <span>🏈 Bowl Eligible</span>
+                      </span>
+                    ) : lossCount >= 7 ? (
+                      <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-800 text-slate-400 border border-white/10">
+                        <span>🔨 Rebuilding</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-[#9a978a]">
+                        {unpickedCount > 0 ? `${unpickedCount} games unpicked` : 'All games picked!'}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -306,9 +352,9 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
                   isLocked 
                     ? 'opacity-85 border-white/10 bg-[#0b0e14]'
                     : isWin
-                      ? 'border-[#86efac]/40 bg-[#0e1218]/90'
+                      ? 'border-[#86efac]/40 bg-[#0e1218]/90 shadow-[0_0_20px_rgba(134,239,172,0.08)]'
                       : isLoss
-                        ? 'border-[#fca5a5]/40 bg-[#0e1218]/90'
+                        ? 'border-[#fca5a5]/40 bg-[#0e1218]/90 shadow-[0_0_20px_rgba(252,165,165,0.08)]'
                         : 'border-white/5 hover:border-white/15'
                 }`}
               >
@@ -384,7 +430,7 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
                     </div>
                   </div>
 
-                  {/* Right: Interactive WIN / LOSS Prediction Buttons OR Lock Badge */}
+                  {/* Right: Tactile Stadium WIN / LOSS Buttons OR Lock Badge */}
                   <div className="flex items-center space-x-2 w-full lg:w-auto justify-end">
                     {isLocked ? (
                       <div className="flex items-center space-x-2 bg-black/80 px-4 py-2 rounded-xl border border-white/10 text-xs">
@@ -404,25 +450,25 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
                       <>
                         <button
                           onClick={() => handlePick(item.gameId, true, isLocked)}
-                          className={`flex-1 lg:flex-none px-5 py-2.5 rounded-xl text-xs font-black tracking-wider uppercase transition flex items-center justify-center space-x-1.5 ${
+                          className={`flex-1 lg:flex-none px-6 py-2.5 rounded-xl text-xs font-black tracking-wider uppercase transition-all duration-200 flex items-center justify-center space-x-1.5 ${
                             isWin
-                              ? 'bg-[#86efac] text-black shadow-lg shadow-[#86efac]/20 scale-105'
-                              : 'bg-black/60 hover:bg-[#86efac]/20 text-[#86efac] border border-[#86efac]/40'
+                              ? 'bg-gradient-to-b from-[#86efac] to-[#4ade80] text-[#052e16] shadow-[0_0_20px_rgba(134,239,172,0.45)] ring-2 ring-[#86efac] scale-105'
+                              : 'bg-[#0a180f] hover:bg-[#122e1c] text-[#86efac] border border-[#86efac]/35 hover:border-[#86efac]/70 hover:shadow-md'
                           }`}
                         >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <CheckCircle2 className={`w-4 h-4 ${isWin ? 'stroke-[2.5]' : ''}`} />
                           <span>WIN</span>
                         </button>
 
                         <button
                           onClick={() => handlePick(item.gameId, false, isLocked)}
-                          className={`flex-1 lg:flex-none px-5 py-2.5 rounded-xl text-xs font-black tracking-wider uppercase transition flex items-center justify-center space-x-1.5 ${
+                          className={`flex-1 lg:flex-none px-6 py-2.5 rounded-xl text-xs font-black tracking-wider uppercase transition-all duration-200 flex items-center justify-center space-x-1.5 ${
                             isLoss
-                              ? 'bg-[#fca5a5] text-black shadow-lg shadow-[#fca5a5]/20 scale-105'
-                              : 'bg-black/60 hover:bg-[#fca5a5]/20 text-[#fca5a5] border border-[#fca5a5]/40'
+                              ? 'bg-gradient-to-b from-[#fca5a5] to-[#f87171] text-[#450a0a] shadow-[0_0_20px_rgba(252,165,165,0.45)] ring-2 ring-[#fca5a5] scale-105'
+                              : 'bg-[#1a0a0c] hover:bg-[#2e1014] text-[#fca5a5] border border-[#fca5a5]/35 hover:border-[#fca5a5]/70 hover:shadow-md'
                           }`}
                         >
-                          <XCircle className="w-3.5 h-3.5" />
+                          <XCircle className={`w-4 h-4 ${isLoss ? 'stroke-[2.5]' : ''}`} />
                           <span>LOSS</span>
                         </button>
                       </>

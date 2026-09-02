@@ -69,15 +69,20 @@ export function MakePicksView() {
                   setActiveConference(conf.id);
                   setSelectedTeam(null);
                 }}
-                className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 ${
                   isSelected
-                    ? 'bg-[#faf6e8] text-black shadow-lg scale-105'
+                    ? 'bg-[#faf6e8] text-black shadow-[0_0_20px_rgba(250,246,232,0.3)] scale-105 ring-1 ring-white/50'
                     : 'bg-[#0e1218] hover:bg-[#151b24] text-[#dcd8c8] border border-white/5 hover:border-white/20'
                 }`}
               >
+                {/* Conference Accent Dot */}
+                <span 
+                  className="w-2 h-2 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: conf.color }}
+                />
                 <span>{conf.label}</span>
                 <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                  isSelected ? 'bg-black/20 text-black' : 'bg-black/60 text-[#9a978a]'
+                  isSelected ? 'bg-black/20 text-black font-bold' : 'bg-black/60 text-[#9a978a]'
                 }`}>
                   {conf.count}
                 </span>
