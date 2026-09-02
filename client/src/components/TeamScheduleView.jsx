@@ -132,21 +132,21 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
   const unpickedCount = scheduleData.filter(g => !g.userPrediction).length;
 
   return (
-    <div className="relative rounded-3xl overflow-hidden p-0 sm:p-2">
-      {/* Respected Team Stadium Aerial Background Layer (70% Opacity) */}
+    <div className="relative z-10 space-y-6 animate-in fade-in duration-200">
+      {/* Respected Team Stadium Aerial Background Layer across entire screen (70% Opacity) */}
       {stadium?.image && (
-        <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden rounded-3xl">
+        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
           <img
             src={stadium.image}
             alt={stadium.name}
             className="w-full h-full object-cover object-center filter contrast-110 saturate-110 opacity-70"
           />
-          {/* Subtle Dark Vignette & Gradient for Crisp Readability */}
-          <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/70 to-slate-950/92" />
-          <div className="absolute inset-0 bg-radial-vignette opacity-80" />
+          {/* Subtle Dark Vignette & Gradient for Crisp Readability across page */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/65 to-black/90" />
+          <div className="absolute inset-0 bg-radial-vignette opacity-75" />
 
-          {/* Stadium Venue Name Badge */}
-          <div className="absolute top-4 right-4 z-10 hidden md:flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-black/75 border border-white/15 backdrop-blur-md text-xs text-slate-300 shadow-xl">
+          {/* Stadium Venue Name Badge Floating at Top Right */}
+          <div className="absolute top-20 right-6 z-10 hidden md:flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-black/85 border border-white/15 backdrop-blur-md text-xs text-slate-300 shadow-2xl">
             <span className="text-amber-400">🏟️</span>
             <span className="font-bold text-white tracking-wide">{stadium.name}</span>
             <span className="text-slate-400 text-[11px]">({stadium.location} • Cap: {stadium.capacity})</span>
@@ -154,16 +154,14 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
         </div>
       )}
 
-      {/* Main Content Area */}
-      <div className="relative z-10 space-y-6">
-        {/* Top Banner with Team Info & Back Button */}
-        <div 
-          className="rounded-3xl p-6 border shadow-2xl relative overflow-hidden backdrop-blur-md"
-          style={{
-            background: `linear-gradient(135deg, ${team.colors?.primary || '#1e293b'}55 0%, #0d1117cc 100%)`,
-            borderColor: `${team.colors?.primary || '#faf6e8'}40`
-          }}
-        >
+      {/* Top Banner with Team Info & Back Button (Restored to clean solid card) */}
+      <div 
+        className="rounded-3xl p-6 border shadow-2xl relative overflow-hidden"
+        style={{
+          background: `linear-gradient(135deg, ${team.colors?.primary || '#1e293b'}44 0%, #0d1117 100%)`,
+          borderColor: `${team.colors?.primary || '#faf6e8'}40`
+        }}
+      >
         <button
           onClick={onBack}
           className="mb-4 inline-flex items-center space-x-2 text-xs font-bold text-[#faf6e8] bg-black/60 hover:bg-black/80 px-3.5 py-1.5 rounded-full border border-white/10 transition"
@@ -533,7 +531,6 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
           })}
         </div>
       )}
-      </div>
     </div>
   );
 }
