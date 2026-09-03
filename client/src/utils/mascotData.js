@@ -503,56 +503,17 @@ export const MASCOT_REGISTRY = {
   },
 
   'ole-miss': {
-    name: 'Tony the Landshark',
+    name: 'Colonel Reb',
     pawColor: '#13294b',
     pawBorder: '#ce1126',
-    svg: `
-      <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <!-- Shark Fin on Head -->
-        <path d="M50 16 L62 38 L38 38 Z" fill="#1E3A8A" stroke="#111827" stroke-width="2"/>
-        <!-- Head -->
-        <ellipse cx="50" cy="54" rx="34" ry="28" fill="#1E3A8A" stroke="#111827" stroke-width="2.5"/>
-        <!-- Shark Face / Snout -->
-        <path d="M22 52 C22 36 78 36 78 52 C78 74 65 82 50 82 C35 82 22 74 22 52 Z" fill="#93C5FD" stroke="#111827" stroke-width="2"/>
-        <!-- Eyes -->
-        <circle cx="36" cy="46" r="5" fill="#111827"/>
-        <circle cx="64" cy="46" r="5" fill="#111827"/>
-        <circle cx="37" cy="44" r="1.5" fill="#FFFFFF"/>
-        <circle cx="65" cy="44" r="1.5" fill="#FFFFFF"/>
-        <!-- Sharp Shark Teeth -->
-        <polygon points="32,66 36,60 40,66" fill="#FFFFFF" stroke="#111827" stroke-width="1"/>
-        <polygon points="40,66 44,60 48,66" fill="#FFFFFF" stroke="#111827" stroke-width="1"/>
-        <polygon points="48,66 52,60 56,66" fill="#FFFFFF" stroke="#111827" stroke-width="1"/>
-        <polygon points="56,66 60,60 64,66" fill="#FFFFFF" stroke="#111827" stroke-width="1"/>
-        <polygon points="64,66 68,60 72,66" fill="#FFFFFF" stroke="#111827" stroke-width="1"/>
-        <!-- Red Collar -->
-        <rect x="26" y="80" width="48" height="8" rx="2" fill="#CE1126" stroke="#111827" stroke-width="1.5"/>
-      </svg>
-    `
+    photoUrl: '/mascots/ole-miss.png'
   },
 
   'vanderbilt': {
-    name: 'Mr. Commodore (Mr. C)',
+    name: 'Mr. C (Mr. Commodore)',
     pawColor: '#866d4b',
     pawBorder: '#000000',
-    svg: `
-      <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <!-- Naval Captain Bicorne Hat -->
-        <path d="M16 42 C20 18 80 18 84 42 Z" fill="#0F172A" stroke="#111827" stroke-width="2.5"/>
-        <path d="M14 42 Q50 34 86 42 Q50 46 14 42 Z" fill="#CA8A04" stroke="#111827" stroke-width="1.5"/>
-        <!-- Gold Star on Hat -->
-        <circle cx="50" cy="28" r="4" fill="#EAB308"/>
-        <!-- Face -->
-        <circle cx="50" cy="56" r="26" fill="#FED7AA" stroke="#111827" stroke-width="2"/>
-        <!-- Eyes -->
-        <circle cx="40" cy="52" r="4" fill="#111827"/>
-        <circle cx="60" cy="52" r="4" fill="#111827"/>
-        <circle cx="41" cy="50" r="1.5" fill="#FFFFFF"/>
-        <circle cx="61" cy="50" r="1.5" fill="#FFFFFF"/>
-        <!-- Commodore White Mustache -->
-        <path d="M30 64 C36 58 48 64 50 64 C52 64 64 58 70 64 C64 74 36 74 30 64 Z" fill="#F8FAFC" stroke="#111827" stroke-width="2"/>
-      </svg>
-    `
+    photoUrl: '/mascots/vanderbilt.png'
   }
 };
 
@@ -572,6 +533,8 @@ export const REAL_MASCOT_PHOTOS = {
   'kentucky': '/mascots/kentucky.png',
   'missouri': '/mascots/missouri.png',
   'mississippi-state': '/mascots/mississippi-state.png',
+  'ole-miss': '/mascots/ole-miss.png',
+  'vanderbilt': '/mascots/vanderbilt.png',
 
   // Big Ten
   'ohio-state': '/mascots/ohio-state.png',
