@@ -77,3 +77,4 @@ MIT — see [LICENSE](LICENSE) for details.
 ## Attribution
 
 Created by Jay from RoboLabs. Learn more at [RoboNuggets](https://robonuggets.com)
+# Cinematic animation modules integrated
