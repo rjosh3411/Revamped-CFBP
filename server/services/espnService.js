@@ -1,13 +1,17 @@
 const db = require('../db/database');
 const { TEAMS_2026 } = require('../db/teamsData');
+const { calculateBettingLine } = require('./oddsService');
 
 const CONFERENCE_GROUPS = {
   ALL: 80,         // All FBS
   TOP25: 80,       // FBS with curatedRank <= 25
   SEC: 8,          // Southeastern Conference
   BIGTEN: 5,       // Big Ten Conference
+  B1G: 5,          // Big Ten alias
   ACC: 1,          // Atlantic Coast Conference
   BIG12: 4,        // Big 12 Conference
+  B12: 4,          // Big 12 alias
+  G5: 151,         // Group of 5
   AAC: 151,        // American Athletic Conference
   MWC: 17,         // Mountain West Conference
   SUNBELT: 37,     // Sun Belt Conference
@@ -27,6 +31,11 @@ const CONFERENCE_TEAMS = {
     'Wisconsin', 'Washington', 'Indiana', 'Illinois', 'Rutgers', 'Michigan State', 
     'Minnesota', 'Maryland', 'UCLA', 'Northwestern', 'Purdue'
   ],
+  B1G: [
+    'Ohio State', 'Oregon', 'Penn State', 'Michigan', 'USC', 'Iowa', 'Nebraska', 
+    'Wisconsin', 'Washington', 'Indiana', 'Illinois', 'Rutgers', 'Michigan State', 
+    'Minnesota', 'Maryland', 'UCLA', 'Northwestern', 'Purdue'
+  ],
   ACC: [
     'Florida State', 'Clemson', 'Miami', 'NC State', 'Louisville', 'Virginia Tech', 
     'SMU', 'North Carolina', 'Georgia Tech', 'California', 'Duke', 'Syracuse', 
@@ -36,6 +45,16 @@ const CONFERENCE_TEAMS = {
     'Utah', 'Kansas State', 'Oklahoma State', 'Arizona', 'Kansas', 'Iowa State', 
     'West Virginia', 'UCF', 'Texas Tech', 'TCU', 'Colorado', 'Baylor', 
     'BYU', 'Cincinnati', 'Arizona State', 'Houston'
+  ],
+  B12: [
+    'Utah', 'Kansas State', 'Oklahoma State', 'Arizona', 'Kansas', 'Iowa State', 
+    'West Virginia', 'UCF', 'Texas Tech', 'TCU', 'Colorado', 'Baylor', 
+    'BYU', 'Cincinnati', 'Arizona State', 'Houston'
+  ],
+  G5: [
+    'Boise State', 'Memphis', 'UNLV', 'Army', 'Tulane', 'South Florida', 'USF', 'UTSA',
+    'App State', 'James Madison', 'Liberty', 'Fresno State', 'San Diego State', 'San José State',
+    'Colorado State', 'Air Force', 'Coastal Carolina', 'Texas State', 'Toledo'
   ],
   AAC: [
     'Memphis', 'UTSA', 'Tulane', 'South Florida', 'Army', 'Navy', 'Rice', 
@@ -90,6 +109,165 @@ class EspnService {
     }
   }
 
+  getCanonicalTeam(rawName, fallback = {}) {
+    if (!rawName) return fallback;
+    const lower = rawName.toLowerCase().trim();
+    
+    // 0. Check alias dictionary
+    const TEAM_ALIASES = {
+      'massachusetts': 'umass',
+      'massachusetts minutemen': 'umass',
+      'connecticut': 'uconn',
+      'connecticut huskies': 'uconn',
+      'pitt': 'pittsburgh',
+      'pitt panthers': 'pittsburgh',
+      'ole miss': 'ole-miss',
+      'ole miss rebels': 'ole-miss',
+      'mississippi rebels': 'ole-miss',
+      'miss state': 'mississippi-state',
+      'mississippi state bulldogs': 'mississippi-state',
+      'texas a&m': 'texas-am',
+      'texas am': 'texas-am',
+      'texas a&m aggies': 'texas-am',
+      'texas am aggies': 'texas-am',
+      'appalachian state': 'app-state',
+      'appalachian state mountaineers': 'app-state',
+      'southern cal': 'usc',
+      'southern california': 'usc',
+      'miami florida': 'miami',
+      'miami fl': 'miami',
+      'miami ohio': 'miami-oh'
+    };
+
+    const targetKey = TEAM_ALIASES[lower] || lower;
+
+    // 1. Exact match by id, name, nickname, or abbreviation
+    const exact = TEAMS_2026.find(t => 
+      t.id.toLowerCase() === targetKey || 
+      t.name.toLowerCase() === targetKey || 
+      (t.nickname && t.nickname.toLowerCase() === targetKey) ||
+      t.abbreviation.toLowerCase() === targetKey
+    );
+    if (exact) return exact;
+
+    // 2. Full displayName match (e.g. "Florida Gators", "TCU Horned Frogs")
+    const fullMatch = TEAMS_2026.find(t => 
+      targetKey === `${t.name.toLowerCase()} ${t.nickname ? t.nickname.toLowerCase() : ''}`.trim()
+    );
+    if (fullMatch) return fullMatch;
+
+    // 3. Fallback for FCS or other non-P4 opponents
+    return {
+      id: targetKey.replace(/[^a-z0-9]/g, '-'),
+      name: rawName,
+      nickname: rawName,
+      abbreviation: rawName.substring(0, 4).toUpperCase(),
+      logoUrl: fallback.logoUrl || 'https://a.espncdn.com/i/teamlogos/ncaa/500/7.png',
+      ranking: null,
+      conference: 'FBS',
+      colors: { primary: '#1e3a8a', secondary: '#ffffff' }
+    };
+  }
+
+  async get2026SeasonGames(year = 2026, week = 1, conference = 'ALL') {
+    const confKey = conference.toUpperCase();
+    const normalizedWeek = week > 14 ? (week === 15 ? 15 : 1) : week;
+
+    try {
+      const schedules = await db.prepare(`
+        SELECT * FROM team_schedules 
+        WHERE (season_year = ? OR season_year = ?) AND (week_number = ? OR week_number = ?)
+        ORDER BY game_date ASC
+      `).all(year, String(year), week, normalizedWeek);
+
+      if (!schedules || schedules.length === 0) {
+        return [];
+      }
+
+      const gameMap = new Map();
+
+      for (const s of schedules) {
+        const thisTeam = this.getCanonicalTeam(s.team_id, { name: s.team_id });
+        const oppTeam = this.getCanonicalTeam(s.opponent_name, { name: s.opponent_name, logoUrl: s.opponent_logo });
+
+        const isHome = s.is_home === 1;
+        const homeTeam = isHome ? thisTeam : oppTeam;
+        const awayTeam = isHome ? oppTeam : thisTeam;
+
+        const pairKey = [homeTeam.id, awayTeam.id].sort().join('___') + '_w' + week;
+
+        if (!gameMap.has(pairKey)) {
+          const odds = calculateBettingLine({
+            homeTeamName: homeTeam.name,
+            homeRank: homeTeam.ranking || null,
+            awayTeamName: awayTeam.name,
+            awayRank: awayTeam.ranking || null
+          });
+
+          gameMap.set(pairKey, {
+            id: s.game_id || `game_2026_w${week}_${homeTeam.id}_vs_${awayTeam.id}`,
+            seasonYear: year,
+            weekNumber: week,
+            date: s.game_date || '2026-09-05T19:00:00Z',
+            name: `${awayTeam.name} at ${homeTeam.name}`,
+            shortName: `${awayTeam.abbreviation || awayTeam.name} @ ${homeTeam.abbreviation || homeTeam.name}`,
+            status: 'STATUS_SCHEDULED',
+            statusDetail: 'Scheduled',
+            isFinal: false,
+            isInProgress: false,
+            winnerId: null,
+            broadcast: s.broadcast || 'ESPN/ABC',
+            venue: s.venue_name || 'College Stadium',
+            odds: odds ? odds.fullLine || odds.details || `${homeTeam.name} -7.0` : null,
+            homeTeam: {
+              id: homeTeam.id,
+              name: homeTeam.name,
+              nickname: homeTeam.nickname || homeTeam.name,
+              abbreviation: homeTeam.abbreviation || homeTeam.name?.substring(0, 4).toUpperCase(),
+              color: homeTeam.colors?.primary || '#1e3a8a',
+              alternateColor: homeTeam.colors?.secondary || '#ffffff',
+              logo: homeTeam.logoUrl || `https://a.espncdn.com/i/teamlogos/ncaa/500/${homeTeam.espnId || 7}.png`,
+              score: 0,
+              rank: homeTeam.ranking || null,
+              record: '0-0',
+              conference: homeTeam.conference || 'FBS'
+            },
+            awayTeam: {
+              id: awayTeam.id,
+              name: awayTeam.name,
+              nickname: awayTeam.nickname || awayTeam.name,
+              abbreviation: awayTeam.abbreviation || awayTeam.name?.substring(0, 4).toUpperCase(),
+              color: awayTeam.colors?.primary || '#991b1b',
+              alternateColor: awayTeam.colors?.secondary || '#ffffff',
+              logo: awayTeam.logoUrl || `https://a.espncdn.com/i/teamlogos/ncaa/500/${awayTeam.espnId || 7}.png`,
+              score: 0,
+              rank: awayTeam.ranking || null,
+              record: '0-0',
+              conference: awayTeam.conference || 'FBS'
+            },
+            conferenceCompetition: homeTeam.conference === awayTeam.conference
+          });
+        }
+      }
+
+      let allGames = Array.from(gameMap.values());
+
+      // Filter by conference if specified
+      if (confKey !== 'ALL') {
+        if (confKey === 'TOP25') {
+          allGames = allGames.filter(g => (g.homeTeam.rank !== null && g.homeTeam.rank <= 25) || (g.awayTeam.rank !== null && g.awayTeam.rank <= 25));
+        } else if (CONFERENCE_TEAMS[confKey]) {
+          allGames = this.filterByConference(allGames, confKey);
+        }
+      }
+
+      return allGames;
+    } catch (e) {
+      console.error('Error in get2026SeasonGames:', e);
+      return [];
+    }
+  }
+
   async getScoreboard({ year = 2026, week = 1, seasonType = 2, conference = 'ALL', forceRefresh = false } = {}) {
     const confKey = conference.toUpperCase();
     const cacheKey = `scoreboard_${year}_w${week}_st${seasonType}_${confKey}`;
@@ -97,6 +275,22 @@ class EspnService {
 
     if (!forceRefresh && cached && (Date.now() - cached.timestamp < this.cacheExpiry)) {
       return cached.data;
+    }
+
+    // For 2026 season schedules, load authentic 2026 week matchups
+    const season2026Games = await this.get2026SeasonGames(year, week, conference);
+    if (season2026Games && season2026Games.length > 0) {
+      const result = {
+        season: { year, type: seasonType },
+        week: { number: week },
+        conference,
+        games: season2026Games,
+        total: season2026Games.length,
+        fromLiveEspn: false,
+        source: 'Official 2026 College Football Schedule'
+      };
+      this.memoryCache.set(cacheKey, { timestamp: Date.now(), data: result });
+      return result;
     }
 
     const groupId = CONFERENCE_GROUPS[confKey] || 80;
@@ -140,19 +334,13 @@ class EspnService {
           warning: 'Serving cached data from database'
         };
       }
-      const fallbackGames = this.generateFallbackGames(year, week);
-      await this.saveGamesToDb(fallbackGames, year, week);
-      let filteredFallback = fallbackGames;
-      if (confKey !== 'ALL' && confKey !== 'TOP25') {
-        filteredFallback = this.filterByConference(fallbackGames, confKey);
-      }
       return {
         season: { year, type: seasonType },
         week: { number: week },
-        games: filteredFallback,
-        total: filteredFallback.length,
+        games: [],
+        total: 0,
         fromLiveEspn: false,
-        warning: 'Serving initialized schedule'
+        warning: 'No games found for requested week'
       };
     }
   }
