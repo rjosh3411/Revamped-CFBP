@@ -3,9 +3,10 @@ import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { TeamScheduleView } from './TeamScheduleView';
 import { CoverflowWeekSelector } from './CoverflowWeekSelector';
+import { GameCard } from './GameCard';
 import { 
-  Shield, LayoutGrid, Sparkles, ChevronRight, 
-  Award, Flame, CheckCircle2 
+  Shield, Calendar, Sparkles, ChevronRight, 
+  Award, Flame, CheckCircle2, Layers, Filter 
 } from 'lucide-react';
 
 const CONFERENCES = [
@@ -17,32 +18,112 @@ const CONFERENCES = [
   { id: 'Independents', label: 'Independents', count: 5, color: '#14b8a6' }
 ];
 
+const WEEK_CONFERENCE_FILTERS = [
+  { id: 'ALL', label: 'All Games' },
+  { id: 'TOP25', label: 'Top 25' },
+  { id: 'SEC', label: 'SEC' },
+  { id: 'B1G', label: 'Big Ten' },
+  { id: 'ACC', label: 'ACC' },
+  { id: 'B12', label: 'Big 12' },
+  { id: 'G5', label: 'Group of 5' }
+];
+
 export function MakePicksView() {
   const { user } = useAuth();
-  const [activeConference, setActiveConference] = useState('SEC');
+  
+  // Mode: 'WEEK' (Weekly Matchups with 3D Coverflow) or 'TEAM' (Full Team Schedules & Stadiums)
+  const [pickMode, setPickMode] = useState('WEEK');
+  
+  // Week Mode State
   const [selectedWeek, setSelectedWeek] = useState(1);
+  const [weekConference, setWeekConference] = useState('ALL');
+  const [weeklyGames, setWeeklyGames] = useState([]);
+  const [loadingGames, setLoadingGames] = useState(false);
+  const [savingPickId, setSavingPickId] = useState(null);
+
+  // Team Mode State
+  const [activeConference, setActiveConference] = useState('SEC');
   const [teams, setTeams] = useState([]);
   const [selectedTeam, setSelectedTeam] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingTeams, setLoadingTeams] = useState(false);
 
   useEffect(() => {
-    loadTeams();
-  }, [activeConference]);
+    if (pickMode === 'WEEK') {
+      loadWeeklyGames();
+    } else {
+      loadTeams();
+    }
+  }, [pickMode, selectedWeek, weekConference, activeConference, user]);
+
+  async function loadWeeklyGames() {
+    setLoadingGames(true);
+    try {
+      const data = await api.getGames({
+        year: 2026,
+        week: selectedWeek,
+        conference: weekConference
+      });
+      setWeeklyGames(data?.games || []);
+    } catch (err) {
+      console.error('Failed to load weekly games:', err);
+    } finally {
+      setLoadingGames(false);
+    }
+  }
 
   async function loadTeams() {
-    setLoading(true);
+    setLoadingTeams(true);
     try {
       const data = await api.getTeams(activeConference);
       setTeams(data?.teams || []);
     } catch (err) {
       console.error('Failed to load teams:', err);
     } finally {
-      setLoading(false);
+      setLoadingTeams(false);
     }
   }
 
-  // If a team is selected, show their full verified 2026 schedule
-  if (selectedTeam) {
+  const handlePick = async (pickData) => {
+    if (!user) {
+      alert('Please sign in or create an account to save your predictions!');
+      return;
+    }
+
+    setSavingPickId(pickData.gameId);
+    try {
+      await api.savePick({
+        gameId: pickData.gameId,
+        seasonYear: pickData.seasonYear || 2026,
+        weekNumber: pickData.weekNumber || selectedWeek,
+        predictedWinnerId: pickData.predictedWinnerId,
+        predictedWinnerName: pickData.predictedWinnerName,
+        confidencePoints: pickData.confidencePoints || 1
+      });
+
+      // Update local game state
+      setWeeklyGames(prev => prev.map(g => {
+        if (g.id === pickData.gameId) {
+          return {
+            ...g,
+            userPick: {
+              ...g.userPick,
+              predicted_winner_id: pickData.predictedWinnerId,
+              predicted_winner_name: pickData.predictedWinnerName,
+              confidence_points: pickData.confidencePoints || 1
+            }
+          };
+        }
+        return g;
+      }));
+    } catch (err) {
+      console.error('Failed to save pick:', err);
+    } finally {
+      setSavingPickId(null);
+    }
+  };
+
+  // If a team is selected in Team Mode, show their full 2026 schedule view
+  if (pickMode === 'TEAM' && selectedTeam) {
     return (
       <TeamScheduleView
         team={selectedTeam}
@@ -59,120 +140,229 @@ export function MakePicksView() {
 
   return (
     <div className="space-y-6">
-      {/* 3D Coverflow Season Schedule Switcher */}
-      <CoverflowWeekSelector
-        currentWeek={selectedWeek}
-        onSelectWeek={(w) => setSelectedWeek(w)}
-        year={2026}
-      />
+      {/* Top Dual Mode Switcher Bar */}
+      <div className="bg-[#0e1218] border border-white/10 rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center space-x-2 text-amber-400 text-xs font-bold uppercase tracking-wider mb-1">
+            <Sparkles className="w-4 h-4" />
+            <span>2026 College Football Predictions</span>
+          </div>
+          <h1 className="text-xl sm:text-2xl font-black text-[#faf6e8] athletic-title uppercase tracking-wide">
+            {pickMode === 'WEEK' ? `Week ${selectedWeek} Matchup Pick'em Slate` : `${activeConference} Team Season Schedules`}
+          </h1>
+          <p className="text-xs text-[#dcd8c8] mt-0.5">
+            {pickMode === 'WEEK'
+              ? 'Select any week in 3D Coverflow to pick all live college football matchups with point spreads!'
+              : 'Choose a team to predict their complete 12-game schedule with on-campus stadium views and mascots!'}
+          </p>
+        </div>
 
-      {/* Conference Filter Bar */}
-      <div className="flex items-center justify-between gap-3 overflow-x-auto pb-1 scrollbar-none">
-        <div className="flex items-center space-x-2">
-          {CONFERENCES.map((conf) => {
-            const isSelected = activeConference === conf.id;
-            return (
-              <button
-                key={conf.id}
-                onClick={() => {
-                  setActiveConference(conf.id);
-                  setSelectedTeam(null);
-                }}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 ${
-                  isSelected
-                    ? 'bg-[#faf6e8] text-black shadow-[0_0_20px_rgba(250,246,232,0.3)] scale-105 ring-1 ring-white/50'
-                    : 'bg-[#0e1218] hover:bg-[#151b24] text-[#dcd8c8] border border-white/5 hover:border-white/20'
-                }`}
-              >
-                {/* Conference Accent Dot */}
-                <span 
-                  className="w-2 h-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: conf.color }}
+        {/* Mode Switcher Buttons */}
+        <div className="flex items-center space-x-1.5 bg-black/80 p-1.5 rounded-2xl border border-white/10 shrink-0 shadow-inner">
+          <button
+            onClick={() => setPickMode('WEEK')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 ${
+              pickMode === 'WEEK'
+                ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20 scale-102'
+                : 'text-[#9a978a] hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Calendar className="w-4 h-4" />
+            <span>By Week</span>
+          </button>
+
+          <button
+            onClick={() => setPickMode('TEAM')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 ${
+              pickMode === 'TEAM'
+                ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20 scale-102'
+                : 'text-[#9a978a] hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Shield className="w-4 h-4" />
+            <span>By Team</span>
+          </button>
+        </div>
+      </div>
+
+      {/* MODE 1: PICK BY WEEK (3D Coverflow + Live Game Cards) */}
+      {pickMode === 'WEEK' && (
+        <div className="space-y-6">
+          {/* 3D Coverflow Week Selector */}
+          <CoverflowWeekSelector
+            currentWeek={selectedWeek}
+            onSelectWeek={(w) => setSelectedWeek(w)}
+            year={2026}
+          />
+
+          {/* Conference Filter Pills for Current Week */}
+          <div className="flex items-center justify-between gap-3 overflow-x-auto pb-1 scrollbar-none">
+            <div className="flex items-center space-x-2">
+              {WEEK_CONFERENCE_FILTERS.map((f) => {
+                const isSelected = weekConference === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    onClick={() => setWeekConference(f.id)}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all duration-150 ${
+                      isSelected
+                        ? 'bg-[#faf6e8] text-black shadow-md scale-105'
+                        : 'bg-[#0e1218] hover:bg-[#151b24] text-[#9a978a] hover:text-white border border-white/5'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="text-xs font-mono font-bold text-amber-400 shrink-0">
+              {weeklyGames.length} {weeklyGames.length === 1 ? 'Game' : 'Games'}
+            </div>
+          </div>
+
+          {/* Weekly Matchups Grid */}
+          {loadingGames ? (
+            <div className="text-center py-20 bg-[#0e1218] border border-white/10 rounded-3xl text-[#9a978a]">
+              <div className="animate-spin w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full mx-auto mb-3"></div>
+              Loading Week {selectedWeek} college football games...
+            </div>
+          ) : weeklyGames.length === 0 ? (
+            <div className="text-center py-16 bg-[#0e1218] border border-white/10 rounded-3xl p-6">
+              <Calendar className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+              <h3 className="text-lg font-black text-white athletic-title uppercase">
+                No Matchups Found for Week {selectedWeek}
+              </h3>
+              <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
+                Try selecting a different conference filter or browse another week via the 3D Coverflow above!
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {weeklyGames.map((game) => (
+                <GameCard
+                  key={game.id}
+                  game={game}
+                  onPick={handlePick}
+                  isSaving={savingPickId === game.id}
                 />
-                <span>{conf.label}</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                  isSelected ? 'bg-black/20 text-black font-bold' : 'bg-black/60 text-[#9a978a]'
-                }`}>
-                  {conf.count}
-                </span>
-              </button>
-            );
-          })}
+              ))}
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
-      {/* TEAMS GRID VIEW */}
-      <div>
-        <div className="flex items-center justify-between mb-3 px-1">
-          <div className="text-xs font-bold text-[#dcd8c8] flex items-center space-x-1.5 uppercase">
-            <Shield className="w-3.5 h-3.5 text-amber-400" />
-            <span>{activeConference} Teams (Select a team to predict their 2026 schedule)</span>
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="text-center py-16 text-[#9a978a]">
-            <div className="animate-spin w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full mx-auto mb-3"></div>
-            Loading {activeConference} teams...
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {teams.map((team) => {
-              const rec = team.projectedRecord || { wins: 0, losses: 0, unpicked: 12 };
-              return (
-                <div
-                  key={team.id}
-                  onClick={() => setSelectedTeam(team)}
-                  className="group cursor-pointer bg-[#0e1218] hover:bg-[#141b24] rounded-2xl p-4 border border-white/5 hover:border-amber-400/60 transition-all duration-200 shadow-xl flex flex-col items-center justify-between text-center relative overflow-hidden"
-                >
-                  {/* Top Color Accent */}
-                  <div 
-                    className="absolute top-0 left-0 right-0 h-1 transition-all group-hover:h-1.5"
-                    style={{ backgroundColor: team.colors?.primary || '#faf6e8' }}
-                  />
-
-                  {/* Logo & Ranking */}
-                  <div className="relative mt-2 mb-1">
-                    <img
-                      src={team.logoUrl}
-                      alt={team.name}
-                      className="w-14 h-14 object-contain drop-shadow-md transition-transform group-hover:scale-110"
-                      onError={(e) => { e.target.src = 'https://a.espncdn.com/i/teamlogos/ncaa/500/7.png'; }}
+      {/* MODE 2: PICK BY TEAM (Full 12-Game Schedule with Stadiums & Mascots) */}
+      {pickMode === 'TEAM' && (
+        <div className="space-y-6">
+          {/* Conference Filter Bar */}
+          <div className="flex items-center justify-between gap-3 overflow-x-auto pb-1 scrollbar-none">
+            <div className="flex items-center space-x-2">
+              {CONFERENCES.map((conf) => {
+                const isSelected = activeConference === conf.id;
+                return (
+                  <button
+                    key={conf.id}
+                    onClick={() => {
+                      setActiveConference(conf.id);
+                      setSelectedTeam(null);
+                    }}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 ${
+                      isSelected
+                        ? 'bg-[#faf6e8] text-black shadow-[0_0_20px_rgba(250,246,232,0.3)] scale-105 ring-1 ring-white/50'
+                        : 'bg-[#0e1218] hover:bg-[#151b24] text-[#dcd8c8] border border-white/5 hover:border-white/20'
+                    }`}
+                  >
+                    <span 
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: conf.color }}
                     />
-                    {team.ranking && (
-                      <span className="absolute -top-1 -left-1 bg-amber-500 text-black text-[10px] font-black px-1.5 py-0.2 rounded-full shadow">
-                        #{team.ranking}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Current Real-World Record (Under Logo) */}
-                  <div className="mb-1.5 inline-flex items-center px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[10px] font-mono font-bold text-amber-300">
-                    <span>Record: {team.currentRecord || '0-0'}</span>
-                  </div>
-
-                  {/* Team Name */}
-                  <div className="w-full">
-                    <div className="text-sm font-extrabold text-white athletic-title line-clamp-1 group-hover:text-amber-400 transition">
-                      {team.name}
-                    </div>
-                    <div className="text-[10px] text-[#9a978a] line-clamp-1">
-                      {team.nickname}
-                    </div>
-                  </div>
-
-                  {/* Projected Record Pill */}
-                  <div className="mt-3 w-full bg-black/60 py-1.5 px-2 rounded-xl border border-white/5 flex items-center justify-between text-[11px] font-mono font-bold">
-                    <span className="text-[#86efac]">{rec.wins}W</span>
-                    <span className="text-[#9a978a]">-</span>
-                    <span className="text-[#fca5a5]">{rec.losses}L</span>
-                  </div>
-                </div>
-              );
-            })}
+                    <span>{conf.label}</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                      isSelected ? 'bg-black/20 text-black font-bold' : 'bg-black/60 text-[#9a978a]'
+                    }`}>
+                      {conf.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* TEAMS GRID VIEW */}
+          <div>
+            <div className="flex items-center justify-between mb-3 px-1">
+              <div className="text-xs font-bold text-[#dcd8c8] flex items-center space-x-1.5 uppercase">
+                <Shield className="w-3.5 h-3.5 text-amber-400" />
+                <span>{activeConference} Teams (Select a team to predict their 2026 schedule)</span>
+              </div>
+            </div>
+
+            {loadingTeams ? (
+              <div className="text-center py-16 text-[#9a978a]">
+                <div className="animate-spin w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full mx-auto mb-3"></div>
+                Loading {activeConference} teams...
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                {teams.map((team) => {
+                  const rec = team.projectedRecord || { wins: 0, losses: 0, unpicked: 12 };
+                  return (
+                    <div
+                      key={team.id}
+                      onClick={() => setSelectedTeam(team)}
+                      className="group cursor-pointer bg-[#0e1218] hover:bg-[#141b24] rounded-2xl p-4 border border-white/5 hover:border-amber-400/60 transition-all duration-200 shadow-xl flex flex-col items-center justify-between text-center relative overflow-hidden"
+                    >
+                      {/* Top Color Accent */}
+                      <div 
+                        className="absolute top-0 left-0 right-0 h-1 transition-all group-hover:h-1.5"
+                        style={{ backgroundColor: team.colors?.primary || '#faf6e8' }}
+                      />
+
+                      {/* Logo & Ranking */}
+                      <div className="relative mt-2 mb-1">
+                        <img
+                          src={team.logoUrl}
+                          alt={team.name}
+                          className="w-14 h-14 object-contain drop-shadow-md transition-transform group-hover:scale-110"
+                          onError={(e) => { e.target.src = 'https://a.espncdn.com/i/teamlogos/ncaa/500/7.png'; }}
+                        />
+                        {team.ranking && (
+                          <span className="absolute -top-1 -left-1 bg-amber-500 text-black text-[10px] font-black px-1.5 py-0.2 rounded-full shadow">
+                            #{team.ranking}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Current Real-World Record */}
+                      <div className="mb-1.5 inline-flex items-center px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[10px] font-mono font-bold text-amber-300">
+                        <span>Record: {team.currentRecord || '0-0'}</span>
+                      </div>
+
+                      {/* Team Name */}
+                      <div className="w-full">
+                        <div className="text-sm font-extrabold text-white athletic-title line-clamp-1 group-hover:text-amber-400 transition">
+                          {team.name}
+                        </div>
+                        <div className="text-[10px] text-[#9a978a] line-clamp-1">
+                          {team.nickname}
+                        </div>
+                      </div>
+
+                      {/* Projected Record Pill */}
+                      <div className="mt-3 w-full bg-black/60 py-1.5 px-2 rounded-xl border border-white/5 flex items-center justify-between text-[11px] font-mono font-bold">
+                        <span className="text-[#86efac]">{rec.wins}W</span>
+                        <span className="text-[#9a978a]">-</span>
+                        <span className="text-[#fca5a5]">{rec.losses}L</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
