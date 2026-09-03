@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { TeamScheduleView } from './TeamScheduleView';
+import { CoverflowWeekSelector } from './CoverflowWeekSelector';
 import { 
   Shield, LayoutGrid, Sparkles, ChevronRight, 
   Award, Flame, CheckCircle2 
@@ -19,6 +20,7 @@ const CONFERENCES = [
 export function MakePicksView() {
   const { user } = useAuth();
   const [activeConference, setActiveConference] = useState('SEC');
+  const [selectedWeek, setSelectedWeek] = useState(1);
   const [teams, setTeams] = useState([]);
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -57,6 +59,13 @@ export function MakePicksView() {
 
   return (
     <div className="space-y-6">
+      {/* 3D Coverflow Season Schedule Switcher */}
+      <CoverflowWeekSelector
+        currentWeek={selectedWeek}
+        onSelectWeek={(w) => setSelectedWeek(w)}
+        year={2026}
+      />
+
       {/* Conference Filter Bar */}
       <div className="flex items-center justify-between gap-3 overflow-x-auto pb-1 scrollbar-none">
         <div className="flex items-center space-x-2">

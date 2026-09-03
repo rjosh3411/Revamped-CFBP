@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from './utils/api';
 import { useAuth } from './context/AuthContext';
 import { Navbar } from './components/Navbar';
+import { KineticGameDayTicker } from './components/KineticGameDayTicker';
 import { LiveScoreboardRibbon } from './components/LiveScoreboardRibbon';
 import { MakePicksView } from './components/MakePicksView';
 import { BuddyComparison } from './components/BuddyComparison';
@@ -111,7 +112,14 @@ export function App() {
         onSelectPartyCode={(code) => setSelectedPartyCode(code)}
       />
 
-      {/* Live Scoreboard Ribbon (Only active during live/game days) */}
+      {/* Cinematic Kinetic Game Day Marquee Ticker */}
+      <KineticGameDayTicker
+        onSelectMatchup={(item) => {
+          setActiveTab('picks');
+        }}
+      />
+
+      {/* Live Scoreboard Ribbon */}
       <LiveScoreboardRibbon
         onSelectGame={(g) => {
           setActiveTab('picks');
