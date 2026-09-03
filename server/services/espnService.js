@@ -346,14 +346,27 @@ class EspnService {
   }
 
   filterByConference(games, conferenceKey) {
-    const teams = CONFERENCE_TEAMS[conferenceKey] || [];
-    if (teams.length === 0) return games;
+    const key = (conferenceKey || '').toUpperCase();
+    if (key === 'ALL') return games;
+    if (key === 'TOP25') {
+      return games.filter(g => (g.homeTeam?.rank !== null && g.homeTeam?.rank <= 25) || (g.awayTeam?.rank !== null && g.awayTeam?.rank <= 25));
+    }
+
+    const confTeams = CONFERENCE_TEAMS[key] || [];
 
     return games.filter(g => {
+      const homeConf = (g.homeTeam?.conference || '').toUpperCase();
+      const awayConf = (g.awayTeam?.conference || '').toUpperCase();
+      
+      if (homeConf === key || awayConf === key) return true;
+      if ((key === 'B1G' || key === 'BIGTEN') && (homeConf.includes('BIG TEN') || awayConf.includes('BIG TEN') || homeConf.includes('BIGTEN') || awayConf.includes('BIGTEN'))) return true;
+      if ((key === 'B12' || key === 'BIG12') && (homeConf.includes('BIG 12') || awayConf.includes('BIG 12') || homeConf.includes('BIG12') || awayConf.includes('BIG12'))) return true;
+      if (key === 'G5' && (homeConf.includes('GROUP') || awayConf.includes('GROUP') || homeConf.includes('AAC') || awayConf.includes('AAC') || homeConf.includes('MWC') || awayConf.includes('MWC') || homeConf.includes('SUNBELT') || awayConf.includes('SUNBELT') || homeConf.includes('MAC') || awayConf.includes('MAC') || homeConf.includes('CUSA') || awayConf.includes('CUSA'))) return true;
+
       const homeName = (g.homeTeam?.name || '').toLowerCase();
       const awayName = (g.awayTeam?.name || '').toLowerCase();
 
-      return teams.some(t => {
+      return confTeams.some(t => {
         const target = t.toLowerCase();
         return homeName.includes(target) || awayName.includes(target);
       });
