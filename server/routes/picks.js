@@ -140,28 +140,29 @@ router.get('/my-stats', authenticateToken, async (req, res) => {
 // POST /api/picks
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { gameId, seasonYear = 2026, weekNumber = 1, predictedWinnerId, predictedWinnerName, confidencePoints = 1, confidenceLevel = null } = req.body;
+    const { gameId, seasonYear = 2026, weekNumber = 1, predictedWinnerId, predictedWinnerName, confidencePoints, confidenceLevel } = req.body;
 
     if (!gameId || !predictedWinnerId || !predictedWinnerName) {
       return res.status(400).json({ error: 'gameId, predictedWinnerId, and predictedWinnerName are required' });
     }
 
-    const safeConfidenceLevel = [1, 2, 3].includes(confidenceLevel) ? confidenceLevel : null;
+    const rawConf = parseInt(confidenceLevel !== undefined && confidenceLevel !== null ? confidenceLevel : (confidencePoints || 1), 10);
+    const safeConf = [1, 2, 3].includes(rawConf) ? rawConf : 1;
+
+    // Check game status
+    const game = await db.prepare('SELECT * FROM games_cache WHERE game_id = ?').get(gameId);
+    const teamSched = await db.prepare('SELECT * FROM team_schedules WHERE game_id = ?').get(gameId);
+    const gameStatus = game?.status || teamSched?.status;
 
     // Only lock predictions if game is final/concluded
     if (gameStatus === 'STATUS_FINAL') {
       return res.status(400).json({
-        error: '🔒 This game has concluded. Predictions for this matchup are locked.'
+        error: 'This game has concluded. Predictions for this matchup are locked.'
       });
     }
 
     let isCorrect = null;
     let pointsAwarded = 0;
-
-    if (game && game.status === 'STATUS_FINAL' && game.winner_team_id) {
-      isCorrect = (game.winner_team_id === predictedWinnerId) ? 1 : 0;
-      pointsAwarded = isCorrect === 1 ? (confidencePoints * 10) : 0;
-    }
 
     const pickId = 'pk_' + crypto.randomBytes(8).toString('hex');
 
@@ -190,13 +191,36 @@ router.post('/', authenticateToken, async (req, res) => {
       parseInt(weekNumber, 10) || 1,
       predictedWinnerId,
       predictedWinnerName,
-      confidencePoints,
-      safeConfidenceLevel,
+      safeConf,
+      safeConf,
       isCorrect,
       pointsAwarded
     );
 
     const savedPick = await db.prepare('SELECT * FROM picks WHERE user_id = ? AND game_id = ?').get(req.user.id, gameId);
+
+    // Update user stats
+    const totalPicksRes = await db.prepare('SELECT COUNT(*) as count FROM picks WHERE user_id = ?').get(req.user.id);
+    const correctPicksRes = await db.prepare('SELECT COUNT(*) as count FROM picks WHERE user_id = ? AND is_correct = 1').get(req.user.id);
+    const totalPointsRes = await db.prepare('SELECT SUM(points_awarded) as sum FROM picks WHERE user_id = ?').get(req.user.id);
+
+    const totalPicks = totalPicksRes?.count || 0;
+    const correctPicks = correctPicksRes?.count || 0;
+    const totalPoints = totalPointsRes?.sum || 0;
+
+    await db.prepare('UPDATE users SET total_picks = ?, correct_picks = ?, total_points = ? WHERE id = ?').run(
+      totalPicks,
+      correctPicks,
+      totalPoints,
+      req.user.id
+    );
+
+    return res.json({ message: 'Pick saved successfully', pick: savedPick });
+  } catch (err) {
+    console.error('Save pick error:', err);
+    return res.status(500).json({ error: 'Failed to save pick' });
+  }
+});
 
     // Update user stats
     const totalPicksRes = await db.prepare('SELECT COUNT(*) as count FROM picks WHERE user_id = ?').get(req.user.id);

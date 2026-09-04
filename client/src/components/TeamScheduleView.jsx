@@ -30,8 +30,9 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
       setScheduleData(schedule);
       const existing = {};
       schedule.forEach(g => {
-        if (g.userPick?.confidence_level) {
-          existing[g.gameId] = g.userPick.confidence_level;
+        const conf = g.userPick?.confidence_level || g.userPick?.confidenceLevel || g.userPick?.confidence_points || g.userPick?.confidencePoints;
+        if (conf) {
+          existing[g.gameId] = conf;
         }
       });
       setConfidenceLevels(existing);
@@ -73,7 +74,12 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
             userPick: {
               predicted_winner_name: winnerName,
               predicted_winner_id: winnerId,
-              confidence_level: currentConfidence
+              predictedWinnerName: winnerName,
+              predictedWinnerId: winnerId,
+              confidence_level: currentConfidence,
+              confidenceLevel: currentConfidence,
+              confidence_points: currentConfidence,
+              confidencePoints: currentConfidence
             }
           };
         }
@@ -109,8 +115,8 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
     setConfidenceLevels(prev => ({ ...prev, [gameId]: newLevel }));
 
     try {
-      const winnerName = game.userPick?.predicted_winner_name;
-      const winnerId = game.userPick?.predicted_winner_id;
+      const winnerName = game.userPick?.predicted_winner_name || game.userPick?.predictedWinnerName;
+      const winnerId = game.userPick?.predicted_winner_id || game.userPick?.predictedWinnerId;
       if (!winnerId || !winnerName) return;
       await api.submitPick({
         gameId,
@@ -498,10 +504,10 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
                       Confidence:
                     </span>
                     {[
-                      { level: 1, icon: '🤷', label: 'Low' },
-                      { level: 2, icon: '👍', label: 'Medium' },
-                      { level: 3, icon: '🔥', label: 'High' }
-                    ].map(({ level, icon, label }) => {
+                      { level: 1, label: '1x Low' },
+                      { level: 2, label: '2x Med' },
+                      { level: 3, label: '3x Lock' }
+                    ].map(({ level, label }) => {
                       const isSelected = confidenceLevels[item.gameId] === level;
                       return (
                         <button
@@ -514,14 +520,13 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
                           }`}
                           title={`Set confidence: ${label}`}
                         >
-                          <span>{icon}</span>
                           <span>{label}</span>
                         </button>
                       );
                     })}
                     {confidenceLevels[item.gameId] && (
                       <span className="text-[10px] text-amber-400 font-bold ml-1">
-                        {confidenceLevels[item.gameId] === 3 ? '🔥 High Confidence Pick!' : confidenceLevels[item.gameId] === 2 ? '👍 Feeling Good' : '🤷 Coin Flip Territory'}
+                        {confidenceLevels[item.gameId] === 3 ? '3x Lock Pick (+30 / -30 PTS)' : confidenceLevels[item.gameId] === 2 ? '2x Med Confidence (+20 / -20 PTS)' : '1x Low Confidence (+10 / -10 PTS)'}
                       </span>
                     )}
                   </div>

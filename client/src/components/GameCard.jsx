@@ -12,7 +12,7 @@ export function GameCard({ game, onPick, isSaving }) {
 
   const pickId = userPick?.predicted_winner_id || userPick?.predictedWinnerId || null;
   const pickName = userPick?.predicted_winner_name || userPick?.predictedWinnerName || null;
-  const pickConfidence = userPick?.confidence_points || userPick?.confidencePoints || 1;
+  const pickConfidence = userPick?.confidence_points || userPick?.confidencePoints || userPick?.confidence_level || userPick?.confidenceLevel || 1;
 
   const [selectedTeamId, setSelectedTeamId] = useState(pickId);
   const [confidence, setConfidence] = useState(pickConfidence);
@@ -349,10 +349,10 @@ export function GameCard({ game, onPick, isSaving }) {
           <div className="flex items-center space-x-1.5 text-xs flex-wrap">
             <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mr-1 hidden sm:inline">Confidence:</span>
             {[
-              { level: 1, icon: '🤷', label: '1x (+10 / -10 pts)' },
-              { level: 2, icon: '👍', label: '2x (+20 / -20 pts)' },
-              { level: 3, icon: '🔥', label: '3x Lock (+30 / -30 pts)' }
-            ].map(({ level, icon, label }) => (
+              { level: 1, label: '1x (+10 / -10 pts)' },
+              { level: 2, label: '2x (+20 / -20 pts)' },
+              { level: 3, label: '3x Lock (+30 / -30 pts)' }
+            ].map(({ level, label }) => (
               <button
                 key={level}
                 disabled={isFinal}
@@ -366,7 +366,6 @@ export function GameCard({ game, onPick, isSaving }) {
                 }`}
                 title={label}
               >
-                <span>{icon}</span>
                 <span>{level}x</span>
               </button>
             ))}
