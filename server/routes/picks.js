@@ -222,29 +222,6 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
-    // Update user stats
-    const totalPicksRes = await db.prepare('SELECT COUNT(*) as count FROM picks WHERE user_id = ?').get(req.user.id);
-    const correctPicksRes = await db.prepare('SELECT COUNT(*) as count FROM picks WHERE user_id = ? AND is_correct = 1').get(req.user.id);
-    const totalPointsRes = await db.prepare('SELECT SUM(points_awarded) as sum FROM picks WHERE user_id = ?').get(req.user.id);
-
-    const totalPicks = totalPicksRes?.count || 0;
-    const correctPicks = correctPicksRes?.count || 0;
-    const totalPoints = totalPointsRes?.sum || 0;
-
-    await db.prepare('UPDATE users SET total_picks = ?, correct_picks = ?, total_points = ? WHERE id = ?').run(
-      totalPicks,
-      correctPicks,
-      totalPoints,
-      req.user.id
-    );
-
-    return res.json({ message: 'Pick saved successfully', pick: savedPick });
-  } catch (err) {
-    console.error('Save pick error:', err);
-    return res.status(500).json({ error: 'Failed to save pick' });
-  }
-});
-
 // POST /api/picks/bulk
 router.post('/bulk', authenticateToken, async (req, res) => {
   try {
