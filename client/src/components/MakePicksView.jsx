@@ -237,7 +237,8 @@ export function MakePicksView() {
         game_id: pickData.gameId,
         predicted_winner_id: pickData.predictedWinnerId,
         predicted_winner_name: pickData.predictedWinnerName,
-        confidence_points: pickData.confidencePoints || 1
+        confidence_points: pickData.confidencePoints || 1,
+        confidence_level: pickData.confidenceLevel || pickData.confidencePoints || 1
       }));
     } catch (e) {}
 
@@ -250,7 +251,8 @@ export function MakePicksView() {
             ...g.userPick,
             predicted_winner_id: pickData.predictedWinnerId,
             predicted_winner_name: pickData.predictedWinnerName,
-            confidence_points: pickData.confidencePoints || 1
+            confidence_points: pickData.confidencePoints || 1,
+            confidence_level: pickData.confidenceLevel || pickData.confidencePoints || 1
           }
         };
       }
@@ -269,7 +271,8 @@ export function MakePicksView() {
         weekNumber: pickData.weekNumber || selectedWeek,
         predictedWinnerId: pickData.predictedWinnerId,
         predictedWinnerName: pickData.predictedWinnerName,
-        confidencePoints: pickData.confidencePoints || 1
+        confidencePoints: pickData.confidencePoints || 1,
+        confidenceLevel: pickData.confidenceLevel || pickData.confidencePoints || 1
       });
     } catch (err) {
       console.error('Failed to save pick:', err);

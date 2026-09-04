@@ -50,6 +50,7 @@ export function GameCard({ game, onPick, isSaving }) {
   ));
 
   const handleSelectWinner = (teamId, teamName) => {
+    if (isFinal) return;
     setSelectedTeamId(teamId);
     if (onPick) {
       onPick({
@@ -58,7 +59,8 @@ export function GameCard({ game, onPick, isSaving }) {
         weekNumber: game.weekNumber || 1,
         predictedWinnerId: teamId,
         predictedWinnerName: teamName,
-        confidencePoints: confidence
+        confidencePoints: confidence,
+        confidenceLevel: confidence
       });
 
       // Subtle celebration confetti
@@ -74,16 +76,19 @@ export function GameCard({ game, onPick, isSaving }) {
   };
 
   const handleConfidenceChange = (pts) => {
+    if (isFinal) return;
     setConfidence(pts);
-    if (selectedTeamId && onPick) {
-      const chosenTeam = selectedTeamId === home.id ? home.name : away.name;
+    const chosenWinnerId = selectedTeamId || home.id;
+    const chosenWinnerName = selectedTeamId === away.id ? away.name : home.name;
+    if (onPick) {
       onPick({
         gameId: game.id,
         seasonYear: game.seasonYear || 2026,
         weekNumber: game.weekNumber || 1,
-        predictedWinnerId: selectedTeamId,
-        predictedWinnerName: chosenTeam,
-        confidencePoints: pts
+        predictedWinnerId: chosenWinnerId,
+        predictedWinnerName: chosenWinnerName,
+        confidencePoints: pts,
+        confidenceLevel: pts
       });
     }
   };
@@ -341,20 +346,28 @@ export function GameCard({ game, onPick, isSaving }) {
           </div>
 
           {/* Confidence points selector */}
-          <div className="flex items-center space-x-1 text-xs">
-            <span className="text-slate-400 text-[11px] mr-1 hidden sm:inline">Confidence:</span>
-            {[1, 2, 3].map(pts => (
+          <div className="flex items-center space-x-1.5 text-xs flex-wrap">
+            <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mr-1 hidden sm:inline">Confidence:</span>
+            {[
+              { level: 1, icon: '🤷', label: '1x (+10 / -10 pts)' },
+              { level: 2, icon: '👍', label: '2x (+20 / -20 pts)' },
+              { level: 3, icon: '🔥', label: '3x Lock (+30 / -30 pts)' }
+            ].map(({ level, icon, label }) => (
               <button
-                key={pts}
-                onClick={() => handleConfidenceChange(pts)}
-                className={`px-2 py-0.5 rounded text-[11px] font-bold transition ${
-                  confidence === pts
-                    ? 'bg-amber-500 text-slate-950 font-black'
-                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                key={level}
+                disabled={isFinal}
+                onClick={() => handleConfidenceChange(level)}
+                className={`flex items-center space-x-1 px-2.5 py-1 rounded-xl text-[11px] font-bold transition ${
+                  confidence === level
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/20 scale-105'
+                    : isFinal
+                      ? 'bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 cursor-pointer'
                 }`}
-                title={`${pts * 10} points on correct prediction`}
+                title={label}
               >
-                {pts}x
+                <span>{icon}</span>
+                <span>{level}x</span>
               </button>
             ))}
           </div>

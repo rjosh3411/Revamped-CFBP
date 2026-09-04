@@ -148,21 +148,11 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const safeConfidenceLevel = [1, 2, 3].includes(confidenceLevel) ? confidenceLevel : null;
 
-    // Check lockout
-    const game = await db.prepare('SELECT * FROM games_cache WHERE game_id = ?').get(gameId);
-    const teamSched = await db.prepare('SELECT * FROM team_schedules WHERE game_id = ?').get(gameId);
-
-    const gameDateStr = game?.game_date || teamSched?.game_date;
-    const gameStatus = game?.status || teamSched?.status;
-    const now = new Date();
-
-    if (gameDateStr) {
-      const gDate = new Date(gameDateStr);
-      if (gDate <= now || gameStatus === 'STATUS_IN_PROGRESS' || gameStatus === 'STATUS_FINAL') {
-        return res.status(400).json({
-          error: '🔒 This game has already started or concluded. Predictions for this matchup are locked.'
-        });
-      }
+    // Only lock predictions if game is final/concluded
+    if (gameStatus === 'STATUS_FINAL') {
+      return res.status(400).json({
+        error: '🔒 This game has concluded. Predictions for this matchup are locked.'
+      });
     }
 
     let isCorrect = null;
@@ -239,10 +229,10 @@ router.post('/bulk', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Array of picks required' });
     }
 
-    const now = new Date();
     for (const p of picks) {
       const game = await db.prepare('SELECT * FROM games_cache WHERE game_id = ?').get(p.gameId);
-      if (game?.game_date && new Date(game.game_date) <= now) {
+      const sched = await db.prepare('SELECT * FROM team_schedules WHERE game_id = ?').get(p.gameId);
+      if (game?.status === 'STATUS_FINAL' || sched?.status === 'STATUS_FINAL') {
         continue;
       }
 
