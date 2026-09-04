@@ -224,133 +224,117 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
     if (p.game_id) picksMap.set(String(p.game_id), p);
   });
 
+  // Duplicate the games array to create an infinite seamless loop
+  const marqueeGames = [...liveGames, ...liveGames];
+
   return (
-    <div className="w-full bg-[#080b0f] border-b border-amber-500/20 py-2 px-3 sm:px-6 relative z-30 shadow-xl select-none animate-in fade-in">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
-        {/* Left Live Badge & Live Status */}
-        <div className="flex items-center space-x-2.5 flex-shrink-0">
-          <span className="relative flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-80"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 shadow-md shadow-red-500/50"></span>
-          </span>
-          <div className="flex flex-col">
-            <span className="text-[11px] font-black tracking-wider uppercase text-white font-mono leading-none flex items-center gap-1.5">
-              LIVE TRACKER
-            </span>
-            <span className="text-[8px] text-amber-400/80 font-mono hidden sm:inline leading-tight mt-0.5">
-              {lastUpdated ? `UPDATED ${lastUpdated} • 1M SYNC` : '1 MIN AUTO-REFRESH'}
-            </span>
-          </div>
-        </div>
+    <div className="w-full bg-[#080b0f] border-b border-amber-500/20 py-2 relative z-30 shadow-2xl select-none overflow-hidden scoreboard-mask group">
+      <div className="animate-scoreboard-marquee flex items-center space-x-3 px-2">
+        {marqueeGames.map(({ rawGame, details }, idx) => {
+          const pick = picksMap.get(String(details.id)) || details.userPick;
+          const { home, away, isLive, isFinal, broadcast, possession } = details;
 
-        {/* Horizontal Ticker Ribbon */}
-        <div className="flex items-center space-x-3 overflow-x-auto py-1 scrollbar-none scroll-smooth">
-          {liveGames.map(({ rawGame, details }, idx) => {
-            const pick = picksMap.get(String(details.id)) || details.userPick;
-            const { home, away, isLive, isFinal, broadcast, possession } = details;
-
-            // Determine if user made a pick on this game
-            let pickBadge = null;
-            if (pick) {
-              if (isFinal) {
-                if (pick.is_correct === 1 || (details.winnerId && String(details.winnerId) === String(pick.predicted_winner_id))) {
-                  pickBadge = <span className="text-[9px] text-[#86efac] font-black bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/40">✓ WON</span>;
-                } else {
-                  pickBadge = <span className="text-[9px] text-[#fca5a5] font-black bg-red-950/80 px-1.5 py-0.5 rounded border border-red-500/40">✗ LOSS</span>;
-                }
+          // Determine if user made a pick on this game
+          let pickBadge = null;
+          if (pick) {
+            if (isFinal) {
+              if (pick.is_correct === 1 || (details.winnerId && String(details.winnerId) === String(pick.predicted_winner_id))) {
+                pickBadge = <span className="text-[9px] text-[#86efac] font-black bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/40">✓ WON</span>;
               } else {
-                pickBadge = (
-                  <span className="text-[9px] text-amber-300/90 font-bold truncate max-w-[80px]">
-                    PICK: {(pick.predicted_winner_name || '').split(' ')[0]}
-                  </span>
-                );
+                pickBadge = <span className="text-[9px] text-[#fca5a5] font-black bg-red-950/80 px-1.5 py-0.5 rounded border border-red-500/40">✗ LOSS</span>;
               }
+            } else {
+              pickBadge = (
+                <span className="text-[9px] text-amber-300/90 font-bold truncate max-w-[80px]">
+                  PICK: {(pick.predicted_winner_name || '').split(' ')[0]}
+                </span>
+              );
             }
+          }
 
-            const isAwayLeading = (isLive || isFinal) && away.score > home.score;
-            const isHomeLeading = (isLive || isFinal) && home.score > away.score;
+          const isAwayLeading = (isLive || isFinal) && away.score > home.score;
+          const isHomeLeading = (isLive || isFinal) && home.score > away.score;
 
-            return (
-              <div
-                key={details.id || idx}
-                onClick={() => onSelectGame && onSelectGame(rawGame)}
-                className={`flex-shrink-0 bg-[#0e1218] hover:bg-[#151b24] rounded-xl p-2.5 min-w-[210px] max-w-[240px] transition cursor-pointer shadow-md group ${
-                  isLive 
-                    ? 'border border-red-500/50 shadow-red-950/40' 
-                    : isFinal 
-                      ? 'border border-white/10 hover:border-emerald-500/30' 
-                      : 'border border-white/5 hover:border-amber-400/30'
-                }`}
-              >
-                {/* Header status bar (Clean LIVE / FINAL indicator) */}
-                <div className="flex items-center justify-between text-[10px] text-[#9a978a] mb-1.5 font-mono border-b border-white/5 pb-1">
-                  <span className={`font-black flex items-center gap-1.5 ${isLive ? 'text-red-400 tracking-wider' : isFinal ? 'text-emerald-400' : 'text-[#9a978a]'}`}>
-                    {isLive && <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />}
-                    {isLive ? 'LIVE' : isFinal ? 'FINAL' : 'UPCOMING'}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    {pickBadge}
-                    {!pickBadge && <span className="text-white/40 text-[9px]">{broadcast || 'ESPN'}</span>}
-                  </div>
-                </div>
-
-                {/* Away Team Row */}
-                <div className="flex items-center justify-between py-0.5">
-                  <div className="flex items-center space-x-2 truncate pr-2">
-                    <img 
-                      src={away.logo} 
-                      alt="" 
-                      className="w-4 h-4 object-contain flex-shrink-0"
-                      onError={(e) => { e.target.src = 'https://a.espncdn.com/i/teamlogos/ncaa/500/7.png'; }}
-                    />
-                    <span className={`font-bold truncate text-xs ${isAwayLeading ? 'text-white' : (isLive || isFinal ? 'text-slate-300' : 'text-slate-200')} group-hover:text-amber-300 transition-colors`}>
-                      {away.rank && <span className="text-amber-400 mr-1 font-mono text-[10px]">#{away.rank}</span>}
-                      {away.name}
-                    </span>
-                    {possession && possession === away.id && (
-                      <span className="text-[10px] animate-bounce ml-0.5" title="Possession">🏈</span>
-                    )}
-                  </div>
-                  {/* Away Score Number */}
-                  <span className={`font-mono font-black text-sm px-1.5 py-0.2 rounded ${
-                    isLive || isFinal 
-                      ? (isAwayLeading ? 'text-amber-400 font-extrabold bg-amber-400/10' : 'text-white') 
-                      : 'text-white/30 text-xs'
-                  }`}>
-                    {isLive || isFinal ? away.score : '-'}
-                  </span>
-                </div>
-
-                {/* Home Team Row */}
-                <div className="flex items-center justify-between py-0.5">
-                  <div className="flex items-center space-x-2 truncate pr-2">
-                    <img 
-                      src={home.logo} 
-                      alt="" 
-                      className="w-4 h-4 object-contain flex-shrink-0"
-                      onError={(e) => { e.target.src = 'https://a.espncdn.com/i/teamlogos/ncaa/500/7.png'; }}
-                    />
-                    <span className={`font-bold truncate text-xs ${isHomeLeading ? 'text-white' : (isLive || isFinal ? 'text-slate-300' : 'text-slate-200')} group-hover:text-amber-300 transition-colors`}>
-                      {home.rank && <span className="text-amber-400 mr-1 font-mono text-[10px]">#{home.rank}</span>}
-                      {home.name}
-                    </span>
-                    {possession && possession === home.id && (
-                      <span className="text-[10px] animate-bounce ml-0.5" title="Possession">🏈</span>
-                    )}
-                  </div>
-                  {/* Home Score Number */}
-                  <span className={`font-mono font-black text-sm px-1.5 py-0.2 rounded ${
-                    isLive || isFinal 
-                      ? (isHomeLeading ? 'text-amber-400 font-extrabold bg-amber-400/10' : 'text-white') 
-                      : 'text-white/30 text-xs'
-                  }`}>
-                    {isLive || isFinal ? home.score : '-'}
-                  </span>
+          return (
+            <div
+              key={`${details.id}-${idx}`}
+              onClick={() => onSelectGame && onSelectGame(rawGame)}
+              className={`flex-shrink-0 bg-[#0e1218] hover:bg-[#151b24] rounded-xl p-2.5 min-w-[210px] max-w-[230px] transition cursor-pointer shadow-md ${
+                isLive 
+                  ? 'border border-red-500/50 shadow-red-950/40' 
+                  : isFinal 
+                    ? 'border border-white/10 hover:border-emerald-500/30' 
+                    : 'border border-white/5 hover:border-amber-400/30'
+              }`}
+            >
+              {/* Header status bar (Clean LIVE / FINAL indicator) */}
+              <div className="flex items-center justify-between text-[10px] text-[#9a978a] mb-1.5 font-mono border-b border-white/5 pb-1">
+                <span className={`font-black flex items-center gap-1.5 ${isLive ? 'text-red-400 tracking-wider' : isFinal ? 'text-emerald-400' : 'text-[#9a978a]'}`}>
+                  {isLive && <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />}
+                  {isLive ? 'LIVE' : isFinal ? 'FINAL' : 'UPCOMING'}
+                </span>
+                <div className="flex items-center gap-1">
+                  {pickBadge}
+                  {!pickBadge && <span className="text-white/40 text-[9px]">{broadcast || 'ESPN'}</span>}
                 </div>
               </div>
-            );
-          })}
-        </div>
+
+              {/* Away Team Row */}
+              <div className="flex items-center justify-between py-0.5">
+                <div className="flex items-center space-x-2 truncate pr-2">
+                  <img 
+                    src={away.logo} 
+                    alt="" 
+                    className="w-4 h-4 object-contain flex-shrink-0"
+                    onError={(e) => { e.target.src = 'https://a.espncdn.com/i/teamlogos/ncaa/500/7.png'; }}
+                  />
+                  <span className={`font-bold truncate text-xs ${isAwayLeading ? 'text-white' : (isLive || isFinal ? 'text-slate-300' : 'text-slate-200')} group-hover:text-amber-300 transition-colors`}>
+                    {away.rank && <span className="text-amber-400 mr-1 font-mono text-[10px]">#{away.rank}</span>}
+                    {away.name}
+                  </span>
+                  {possession && possession === away.id && (
+                    <span className="text-[10px] animate-bounce ml-0.5" title="Possession">🏈</span>
+                  )}
+                </div>
+                {/* Away Score Number */}
+                <span className={`font-mono font-black text-sm px-1.5 py-0.2 rounded ${
+                  isLive || isFinal 
+                    ? (isAwayLeading ? 'text-amber-400 font-extrabold bg-amber-400/10' : 'text-white') 
+                    : 'text-white/30 text-xs'
+                }`}>
+                  {isLive || isFinal ? away.score : '-'}
+                </span>
+              </div>
+
+              {/* Home Team Row */}
+              <div className="flex items-center justify-between py-0.5">
+                <div className="flex items-center space-x-2 truncate pr-2">
+                  <img 
+                    src={home.logo} 
+                    alt="" 
+                    className="w-4 h-4 object-contain flex-shrink-0"
+                    onError={(e) => { e.target.src = 'https://a.espncdn.com/i/teamlogos/ncaa/500/7.png'; }}
+                  />
+                  <span className={`font-bold truncate text-xs ${isHomeLeading ? 'text-white' : (isLive || isFinal ? 'text-slate-300' : 'text-slate-200')} group-hover:text-amber-300 transition-colors`}>
+                    {home.rank && <span className="text-amber-400 mr-1 font-mono text-[10px]">#{home.rank}</span>}
+                    {home.name}
+                  </span>
+                  {possession && possession === home.id && (
+                    <span className="text-[10px] animate-bounce ml-0.5" title="Possession">🏈</span>
+                  )}
+                </div>
+                {/* Home Score Number */}
+                <span className={`font-mono font-black text-sm px-1.5 py-0.2 rounded ${
+                  isLive || isFinal 
+                    ? (isHomeLeading ? 'text-amber-400 font-extrabold bg-amber-400/10' : 'text-white') 
+                    : 'text-white/30 text-xs'
+                }`}>
+                  {isLive || isFinal ? home.score : '-'}
+                </span>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

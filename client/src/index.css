@@ -152,6 +152,33 @@
   animation: mascot-nervous-wobble 1.5s infinite ease-in-out;
 }
 
+/* Continuous Marquee Animation for Live Score Ribbon */
+@keyframes scoreboard-marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-scoreboard-marquee {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  animation: scoreboard-marquee 45s linear infinite;
+}
+
+.animate-scoreboard-marquee:hover,
+.animate-scoreboard-marquee:active {
+  animation-play-state: paused;
+}
+
+.scoreboard-mask {
+  mask-image: linear-gradient(to right, transparent, black 2%, black 98%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 2%, black 98%, transparent);
+}
+
 @keyframes football-flyin-spiral {
   0% {
     transform: translate(120vw, -100vh) scale(2.8) rotate(720deg);
