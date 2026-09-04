@@ -122,10 +122,10 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
   useEffect(() => {
     loadScoreboard(false);
 
-    // Continuous real-time auto-refresh every 12 seconds
+    // Auto-refresh scores every 1 minute (60,000 ms)
     pollTimerRef.current = setInterval(() => {
       loadScoreboard(true);
-    }, 12000);
+    }, 60000);
 
     return () => {
       if (pollTimerRef.current) {
@@ -208,7 +208,7 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
 
       setLiveGames(combined.slice(0, 25));
       setUserPicks(userPicksData);
-      setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     } catch (err) {
       console.warn('Failed to load live scores:', err);
     }
@@ -237,11 +237,9 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
             <span className="text-[11px] font-black tracking-wider uppercase text-white font-mono leading-none flex items-center gap-1.5">
               LIVE TRACKER
             </span>
-            {lastUpdated && (
-              <span className="text-[8px] text-amber-400/80 font-mono hidden sm:inline leading-tight mt-0.5">
-                ESPN STREAM • {lastUpdated}
-              </span>
-            )}
+            <span className="text-[8px] text-amber-400/80 font-mono hidden sm:inline leading-tight mt-0.5">
+              {lastUpdated ? `UPDATED ${lastUpdated} • 1M SYNC` : '1 MIN AUTO-REFRESH'}
+            </span>
           </div>
         </div>
 
@@ -249,7 +247,7 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
         <div className="flex items-center space-x-3 overflow-x-auto py-1 scrollbar-none scroll-smooth">
           {liveGames.map(({ rawGame, details }, idx) => {
             const pick = picksMap.get(String(details.id)) || details.userPick;
-            const { home, away, isLive, isFinal, broadcast, statusDetail, period, clock, downDistance, possession } = details;
+            const { home, away, isLive, isFinal, broadcast, possession } = details;
 
             // Determine if user made a pick on this game
             let pickBadge = null;
@@ -286,16 +284,6 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
               }
             }
 
-            // Period & Clock label
-            let headerLabel = statusDetail || 'Scheduled';
-            if (isLive) {
-              if (clock && period) {
-                headerLabel = `Q${period} ${clock}`;
-              } else if (period) {
-                headerLabel = `Q${period}`;
-              }
-            }
-
             const isAwayLeading = (isLive || isFinal) && away.score > home.score;
             const isHomeLeading = (isLive || isFinal) && home.score > away.score;
 
@@ -303,19 +291,19 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
               <div
                 key={details.id || idx}
                 onClick={() => onSelectGame && onSelectGame(rawGame)}
-                className={`flex-shrink-0 bg-[#0e1218] hover:bg-[#151b24] rounded-xl p-2.5 min-w-[215px] max-w-[245px] transition cursor-pointer shadow-md group ${
+                className={`flex-shrink-0 bg-[#0e1218] hover:bg-[#151b24] rounded-xl p-2.5 min-w-[210px] max-w-[240px] transition cursor-pointer shadow-md group ${
                   isLive 
-                    ? 'border border-red-500/40 shadow-red-950/30' 
+                    ? 'border border-red-500/50 shadow-red-950/40' 
                     : isFinal 
                       ? 'border border-white/10 hover:border-emerald-500/30' 
                       : 'border border-white/5 hover:border-amber-400/30'
                 }`}
               >
-                {/* Header status bar */}
+                {/* Header status bar (Clean LIVE / FINAL indicator) */}
                 <div className="flex items-center justify-between text-[10px] text-[#9a978a] mb-1.5 font-mono border-b border-white/5 pb-1">
-                  <span className={`font-black flex items-center gap-1.5 truncate ${isLive ? 'text-red-400' : isFinal ? 'text-emerald-400' : 'text-[#9a978a]'}`}>
+                  <span className={`font-black flex items-center gap-1.5 ${isLive ? 'text-red-400 tracking-wider' : isFinal ? 'text-emerald-400' : 'text-[#9a978a]'}`}>
                     {isLive && <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />}
-                    {isLive ? headerLabel : isFinal ? 'FINAL' : (headerLabel.length > 16 ? headerLabel.slice(0, 16) + '…' : headerLabel)}
+                    {isLive ? 'LIVE' : isFinal ? 'FINAL' : 'UPCOMING'}
                   </span>
                   <div className="flex items-center gap-1">
                     {pickBadge}
@@ -376,17 +364,6 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
                     {isLive || isFinal ? home.score : '-'}
                   </span>
                 </div>
-
-                {/* Down & distance footer if live in progress */}
-                {isLive && downDistance && (
-                  <div className="mt-1.5 pt-1 border-t border-white/5 text-[9px] text-amber-300/80 font-mono flex items-center justify-between">
-                    <span className="truncate">{downDistance}</span>
-                    <span className="text-red-400 font-bold flex items-center gap-1">
-                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
-                      LIVE
-                    </span>
-                  </div>
-                )}
               </div>
             );
           })}

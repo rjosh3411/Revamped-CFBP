@@ -134,7 +134,7 @@ export function GameCard({ game, onPick, isSaving }) {
           ) : isInProgress ? (
             <span className="flex items-center text-[11px] font-extrabold text-red-400 bg-red-950/60 px-2 py-0.5 rounded border border-red-800 animate-pulse">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5 animate-ping"></span>
-              {game.statusDetail || 'LIVE'}
+              LIVE
             </span>
           ) : (
             <span className="text-[11px] font-semibold text-slate-400">
