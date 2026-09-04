@@ -28,6 +28,38 @@ const WEEK_CONFERENCE_FILTERS = [
   { id: 'G5', label: 'Group of 5' }
 ];
 
+const SEC_TEAMS = new Set([
+  'georgia', 'alabama', 'texas', 'ole-miss', 'tennessee', 'lsu', 'missouri', 
+  'oklahoma', 'texas-am', 'kentucky', 'auburn', 'florida', 'south-carolina', 
+  'arkansas', 'vanderbilt', 'mississippi-state'
+]);
+
+const B1G_TEAMS = new Set([
+  'ohio-state', 'oregon', 'penn-state', 'michigan', 'usc', 'iowa', 'nebraska', 
+  'wisconsin', 'washington', 'indiana', 'illinois', 'rutgers', 'michigan-state', 
+  'minnesota', 'maryland', 'ucla', 'northwestern', 'purdue'
+]);
+
+const ACC_TEAMS = new Set([
+  'florida-state', 'clemson', 'miami', 'nc-state', 'louisville', 'virginia-tech', 
+  'smu', 'north-carolina', 'georgia-tech', 'california', 'duke', 'syracuse', 
+  'boston-college', 'virginia', 'pittsburgh', 'wake-forest', 'stanford'
+]);
+
+const B12_TEAMS = new Set([
+  'utah', 'kansas-state', 'oklahoma-state', 'arizona', 'kansas', 'iowa-state', 
+  'west-virginia', 'ucf', 'texas-tech', 'tcu', 'colorado', 'baylor', 
+  'byu', 'cincinnati', 'arizona-state', 'houston'
+]);
+
+const G5_TEAMS = new Set([
+  'boise-state', 'memphis', 'unlv', 'army', 'tulane', 'usf', 'utsa', 'app-state',
+  'james-madison', 'liberty', 'fresno-state', 'san-diego-state', 'san-jose-state',
+  'colorado-state', 'air-force', 'coastal-carolina', 'texas-state', 'toledo',
+  'miami-oh', 'western-kentucky', 'jacksonville-state', 'hawaii', 'nevada', 'wyoming',
+  'notre-dame', 'uconn', 'umass', 'oregon-state', 'washington-state'
+]);
+
 export function MakePicksView() {
   const { user } = useAuth();
   
@@ -70,6 +102,35 @@ export function MakePicksView() {
       setLoadingGames(false);
     }
   }
+
+  // Filter games strictly by selected conference tab
+  const displayedGames = weeklyGames.filter(g => {
+    if (weekConference === 'ALL') return true;
+    if (weekConference === 'TOP25') {
+      return (g.homeTeam?.rank !== null && g.homeTeam?.rank <= 25) || (g.awayTeam?.rank !== null && g.awayTeam?.rank <= 25);
+    }
+    const hId = (g.homeTeam?.id || '').toLowerCase();
+    const aId = (g.awayTeam?.id || '').toLowerCase();
+    const hConf = (g.homeTeam?.conference || '').toUpperCase();
+    const aConf = (g.awayTeam?.conference || '').toUpperCase();
+
+    if (weekConference === 'SEC') {
+      return hConf === 'SEC' || aConf === 'SEC' || SEC_TEAMS.has(hId) || SEC_TEAMS.has(aId);
+    }
+    if (weekConference === 'B1G' || weekConference === 'BIGTEN') {
+      return hConf.includes('BIG TEN') || aConf.includes('BIG TEN') || hConf.includes('BIGTEN') || aConf.includes('BIGTEN') || B1G_TEAMS.has(hId) || B1G_TEAMS.has(aId);
+    }
+    if (weekConference === 'ACC') {
+      return hConf === 'ACC' || aConf === 'ACC' || ACC_TEAMS.has(hId) || ACC_TEAMS.has(aId);
+    }
+    if (weekConference === 'B12' || weekConference === 'BIG12') {
+      return hConf.includes('BIG 12') || aConf.includes('BIG 12') || hConf.includes('BIG12') || aConf.includes('BIG12') || B12_TEAMS.has(hId) || B12_TEAMS.has(aId);
+    }
+    if (weekConference === 'G5') {
+      return hConf.includes('GROUP') || aConf.includes('GROUP') || G5_TEAMS.has(hId) || G5_TEAMS.has(aId);
+    }
+    return true;
+  });
 
   async function loadTeams() {
     setLoadingTeams(true);
@@ -217,7 +278,7 @@ export function MakePicksView() {
             </div>
 
             <div className="text-xs font-mono font-bold text-amber-400 shrink-0">
-              {weeklyGames.length} {weeklyGames.length === 1 ? 'Game' : 'Games'}
+              {displayedGames.length} {displayedGames.length === 1 ? 'Game' : 'Games'}
             </div>
           </div>
 
@@ -227,11 +288,11 @@ export function MakePicksView() {
               <div className="animate-spin w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full mx-auto mb-3"></div>
               Loading Week {selectedWeek} college football games...
             </div>
-          ) : weeklyGames.length === 0 ? (
+          ) : displayedGames.length === 0 ? (
             <div className="text-center py-16 bg-[#0e1218] border border-white/10 rounded-3xl p-6">
               <Calendar className="w-12 h-12 text-slate-600 mx-auto mb-3" />
               <h3 className="text-lg font-black text-white athletic-title uppercase">
-                No Matchups Found for Week {selectedWeek}
+                No Matchups Found for Week {selectedWeek} ({weekConference})
               </h3>
               <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
                 Try selecting a different conference filter or browse another week via the 3D Coverflow above!
@@ -239,7 +300,7 @@ export function MakePicksView() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {weeklyGames.map((game) => (
+              {displayedGames.map((game) => (
                 <GameCard
                   key={game.id}
                   game={game}
