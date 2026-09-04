@@ -352,24 +352,34 @@ class EspnService {
       return games.filter(g => (g.homeTeam?.rank !== null && g.homeTeam?.rank <= 25) || (g.awayTeam?.rank !== null && g.awayTeam?.rank <= 25));
     }
 
-    const confTeams = CONFERENCE_TEAMS[key] || [];
+    const SEC_IDS = new Set(TEAMS_2026.filter(t => t.conference === 'SEC').map(t => t.id));
+    const B1G_IDS = new Set(TEAMS_2026.filter(t => t.conference === 'Big Ten').map(t => t.id));
+    const ACC_IDS = new Set(TEAMS_2026.filter(t => t.conference === 'ACC').map(t => t.id));
+    const B12_IDS = new Set(TEAMS_2026.filter(t => t.conference === 'Big 12').map(t => t.id));
+    const G5_IDS = new Set(TEAMS_2026.filter(t => t.conference === 'Group of 5').map(t => t.id));
 
     return games.filter(g => {
-      const homeConf = (g.homeTeam?.conference || '').toUpperCase();
-      const awayConf = (g.awayTeam?.conference || '').toUpperCase();
-      
-      if (homeConf === key || awayConf === key) return true;
-      if ((key === 'B1G' || key === 'BIGTEN') && (homeConf.includes('BIG TEN') || awayConf.includes('BIG TEN') || homeConf.includes('BIGTEN') || awayConf.includes('BIGTEN'))) return true;
-      if ((key === 'B12' || key === 'BIG12') && (homeConf.includes('BIG 12') || awayConf.includes('BIG 12') || homeConf.includes('BIG12') || awayConf.includes('BIG12'))) return true;
-      if (key === 'G5' && (homeConf.includes('GROUP') || awayConf.includes('GROUP') || homeConf.includes('AAC') || awayConf.includes('AAC') || homeConf.includes('MWC') || awayConf.includes('MWC') || homeConf.includes('SUNBELT') || awayConf.includes('SUNBELT') || homeConf.includes('MAC') || awayConf.includes('MAC') || homeConf.includes('CUSA') || awayConf.includes('CUSA'))) return true;
+      const hId = (g.homeTeam?.id || '').toLowerCase();
+      const aId = (g.awayTeam?.id || '').toLowerCase();
+      const hConf = (g.homeTeam?.conference || '').toUpperCase();
+      const aConf = (g.awayTeam?.conference || '').toUpperCase();
 
-      const homeName = (g.homeTeam?.name || '').toLowerCase();
-      const awayName = (g.awayTeam?.name || '').toLowerCase();
-
-      return confTeams.some(t => {
-        const target = t.toLowerCase();
-        return homeName.includes(target) || awayName.includes(target);
-      });
+      if (key === 'SEC') {
+        return hConf === 'SEC' || aConf === 'SEC' || SEC_IDS.has(hId) || SEC_IDS.has(aId);
+      }
+      if (key === 'B1G' || key === 'BIGTEN') {
+        return hConf.includes('BIG TEN') || aConf.includes('BIG TEN') || hConf.includes('BIGTEN') || aConf.includes('BIGTEN') || B1G_IDS.has(hId) || B1G_IDS.has(aId);
+      }
+      if (key === 'ACC') {
+        return hConf === 'ACC' || aConf === 'ACC' || ACC_IDS.has(hId) || ACC_IDS.has(aId);
+      }
+      if (key === 'B12' || key === 'BIG12') {
+        return hConf.includes('BIG 12') || aConf.includes('BIG 12') || hConf.includes('BIG12') || aConf.includes('BIG12') || B12_IDS.has(hId) || B12_IDS.has(aId);
+      }
+      if (key === 'G5') {
+        return hConf.includes('GROUP') || aConf.includes('GROUP') || G5_IDS.has(hId) || G5_IDS.has(aId);
+      }
+      return false;
     });
   }
 

@@ -24,8 +24,8 @@ router.get('/', optionalAuth, async (req, res) => {
 
     let games = scoreboard.games || [];
 
-    if (conference === 'TOP25') {
-      games = games.filter(g => (g.homeTeam.rank !== null && g.homeTeam.rank <= 25) || (g.awayTeam.rank !== null && g.awayTeam.rank <= 25));
+    if (conference && conference !== 'ALL') {
+      games = espnService.filterByConference(games, conference);
     }
 
     let userPicksMap = {};
