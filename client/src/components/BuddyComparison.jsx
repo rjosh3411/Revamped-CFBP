@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { UserRecordBanner } from './UserRecordBanner';
@@ -159,45 +159,51 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
   const [filterMode, setFilterMode] = useState('ALL'); // 'ALL', 'DISAGREED', 'AGREED', 'LOCKS'
   const [copiedCode, setCopiedCode] = useState(false);
 
+  // Sync selectedPartyId when parties prop loads
   useEffect(() => {
     if (parties?.length > 0 && !selectedPartyId) {
       setSelectedPartyId(parties[0].id);
     }
-  }, [parties]);
+  }, [parties, selectedPartyId]);
 
+  // Load comparison data whenever party or week changes
   useEffect(() => {
+    let isMounted = true;
     if (selectedPartyId) {
-      loadComparison(selectedPartyId, selectedBuddyId);
-    }
-  }, [selectedPartyId, selectedBuddyId, currentWeek, currentYear]);
-
-  async function loadComparison(pId = selectedPartyId, bId = selectedBuddyId) {
-    if (!pId) return;
-    setLoading(true);
-    try {
-      const data = await api.getBuddyComparison(pId, {
+      setLoading(true);
+      api.getBuddyComparison(selectedPartyId, {
         year: currentYear || 2026,
         week: currentWeek || 1,
-        buddyId: bId || undefined
+        buddyId: selectedBuddyId || undefined
+      }).then(data => {
+        if (isMounted && data) {
+          setComparisonData(data);
+        }
+      }).catch(err => {
+        console.warn('Buddy comparison load warning:', err);
+      }).finally(() => {
+        if (isMounted) setLoading(false);
       });
-      setComparisonData(data);
-      if (data.selectedBuddy && !selectedBuddyId) {
-        setSelectedBuddyId(data.selectedBuddy.id);
-      }
-    } catch (err) {
-      console.warn('Failed to load buddy comparison:', err);
-    } finally {
-      setLoading(false);
     }
-  }
+    return () => { isMounted = false; };
+  }, [selectedPartyId, selectedBuddyId, currentWeek, currentYear]);
 
-  const selectedParty = parties.find(p => p.id === selectedPartyId) || parties[0];
+  const selectedParty = parties.find(p => p.id === selectedPartyId) || parties[0] || comparisonData?.party;
   const buddies = comparisonData?.buddies || [];
   const selectedBuddy = comparisonData?.selectedBuddy;
   const rivalryRoster = comparisonData?.rivalryRoster || [];
   const headToHeadClash = comparisonData?.headToHeadClash;
   const mySeasonRecord = comparisonData?.currentUser?.seasonRecord;
   const buddySeasonRecord = comparisonData?.selectedBuddy?.seasonRecord;
+
+  // Safe identity access
+  const userName = user?.display_name || user?.displayName || user?.username || 'You';
+  const userAvatar = user?.avatar_url || user?.avatarUrl;
+  const userTeam = user?.favorite_team || user?.favoriteTeam || 'College Football';
+
+  const buddyName = selectedBuddy?.displayName || selectedBuddy?.display_name || selectedBuddy?.username || 'Rival';
+  const buddyAvatar = selectedBuddy?.avatarUrl || selectedBuddy?.avatar_url;
+  const buddyTeam = selectedBuddy?.favoriteTeam || selectedBuddy?.favorite_team || 'College Football';
 
   const comparisons = (comparisonData?.comparisons || []).map(c => {
     if (c.myPick && c.buddyPick) {
@@ -228,6 +234,8 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
     disagreedCount,
     agreementRate
   };
+
+  const pointDiff = Math.abs(headToHeadClash?.pointDifferential || 0);
 
   const handleCopyCode = () => {
     if (selectedParty?.invite_code) {
@@ -271,28 +279,29 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
           </div>
 
           {/* Party Selector */}
-          <div className="flex items-center gap-3 w-full lg:w-auto">
-            <div className="relative flex-1 sm:flex-none">
-              <label className="block text-[10px] uppercase font-bold text-white/50 mb-1 tracking-wider">Active Party</label>
-              <div className="relative group">
-                <select
-                  value={selectedPartyId}
-                  onChange={(e) => {
-                    const newPartyId = e.target.value;
-                    setSelectedPartyId(newPartyId);
-                    setSelectedBuddyId('');
-                    loadComparison(newPartyId, '');
-                  }}
-                  className="w-full sm:w-64 appearance-none bg-[#090d14]/90 hover:bg-[#121824] text-white text-xs font-bold pl-3.5 pr-10 py-2.5 rounded-2xl border border-white/10 hover:border-amber-400/50 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 shadow-xl transition backdrop-blur-md cursor-pointer"
-                >
-                  {parties.map(p => (
-                    <option key={p.id} value={p.id} className="bg-[#0e1218] text-white py-1.5">{p.icon} {p.name}</option>
-                  ))}
-                </select>
-                <ChevronDown className="w-4 h-4 text-amber-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 group-hover:opacity-100 transition" />
+          {parties.length > 0 && (
+            <div className="flex items-center gap-3 w-full lg:w-auto">
+              <div className="relative flex-1 sm:flex-none">
+                <label className="block text-[10px] uppercase font-bold text-white/50 mb-1 tracking-wider">Active Party</label>
+                <div className="relative group">
+                  <select
+                    value={selectedPartyId || parties[0]?.id}
+                    onChange={(e) => {
+                      const newPartyId = e.target.value;
+                      setSelectedPartyId(newPartyId);
+                      setSelectedBuddyId('');
+                    }}
+                    className="w-full sm:w-64 appearance-none bg-[#090d14]/90 hover:bg-[#121824] text-white text-xs font-bold pl-3.5 pr-10 py-2.5 rounded-2xl border border-white/10 hover:border-amber-400/50 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 shadow-xl transition backdrop-blur-md cursor-pointer"
+                  >
+                    {parties.map(p => (
+                      <option key={p.id} value={p.id} className="bg-[#0e1218] text-white py-1.5">{p.icon || '🎉'} {p.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-amber-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 group-hover:opacity-100 transition" />
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Party Rivalry Quick-Switcher Roster */}
@@ -312,11 +321,8 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
                 return (
                   <button
                     key={b.id}
-                    onClick={() => {
-                      setSelectedBuddyId(b.id);
-                      loadComparison(selectedPartyId, b.id);
-                    }}
-                    className={`shrink-0 flex items-center space-x-2.5 px-3 py-2 rounded-2xl border transition-all duration-200 text-left ${
+                    onClick={() => setSelectedBuddyId(b.id)}
+                    className={`shrink-0 flex items-center space-x-2.5 px-3 py-2 rounded-2xl border transition-all duration-200 text-left cursor-pointer ${
                       isSelected
                         ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 border-amber-400/80 shadow-lg shadow-amber-500/10 scale-102'
                         : 'bg-black/40 hover:bg-black/70 border-white/10 hover:border-white/20'
@@ -329,7 +335,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black ring-1 ${
                         isSelected ? 'bg-amber-500 text-black ring-amber-400' : 'bg-white/10 text-white ring-white/20'
                       }`}>
-                        {b.displayName.charAt(0)}
+                        {(b.displayName || 'U').charAt(0)}
                       </div>
                     )}
 
@@ -344,7 +350,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
                         )}
                       </div>
                       <div className="text-[10px] text-white/50 font-mono font-bold">
-                        {b.myContestedPoints} - {b.buddyContestedPoints} PTS
+                        {b.myContestedPoints || 0} - {b.buddyContestedPoints || 0} PTS
                       </div>
                     </div>
                   </button>
@@ -365,11 +371,11 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
               {/* Left Fighter: YOU */}
               <div className="flex items-center space-x-3.5 bg-black/40 p-3.5 rounded-2xl border border-white/10">
                 <div className="relative shrink-0">
-                  {user?.avatar_url ? (
-                    <img src={user.avatar_url} alt={user.display_name} className="w-14 h-14 rounded-2xl object-cover ring-2 ring-amber-400 shadow-lg" />
+                  {userAvatar ? (
+                    <img src={userAvatar} alt={userName} className="w-14 h-14 rounded-2xl object-cover ring-2 ring-amber-400 shadow-lg" />
                   ) : (
                     <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-black flex items-center justify-center font-black text-xl shadow-lg ring-2 ring-amber-400">
-                      {user?.display_name?.charAt(0) || 'U'}
+                      {userName.charAt(0) || 'U'}
                     </div>
                   )}
                   <span className="absolute -bottom-1 -right-1 text-[9px] font-black bg-amber-500 text-black px-1.5 py-0.2 rounded-full border border-black">
@@ -377,14 +383,14 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
                   </span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-black text-amber-400 uppercase truncate">{user?.display_name}</div>
-                  <div className="text-xs text-white/60 font-semibold truncate">{user?.favorite_team}</div>
+                  <div className="text-xs font-black text-amber-400 uppercase truncate">{userName}</div>
+                  <div className="text-xs text-white/60 font-semibold truncate">{userTeam}</div>
                   <div className="flex items-center space-x-2 mt-1">
                     <span className="text-xs font-black text-white font-mono bg-white/10 px-1.5 py-0.5 rounded">
-                      {mySeasonRecord?.wins || 0}-{mySeasonRecord?.losses || 0} ({mySeasonRecord?.winRate || 0}%)
+                      {mySeasonRecord?.wins || user?.correct_picks || 0}-{mySeasonRecord?.losses || ((user?.total_picks || 0) - (user?.correct_picks || 0)) || 0} ({mySeasonRecord?.winRate || 0}%)
                     </span>
                     <span className="text-xs font-black text-amber-300 font-mono">
-                      {mySeasonRecord?.totalPoints || 0} PTS
+                      {mySeasonRecord?.totalPoints || user?.total_points || 0} PTS
                     </span>
                   </div>
                 </div>
@@ -422,15 +428,15 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
                 <div className="mt-2.5">
                   {headToHeadClash?.seriesLeader === 'YOU_LEADING' && (
                     <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                      🏆 LEADING BY {Math.abs(headToHeadClash.pointDifferential)} PTS ({headToHeadClash.myContestedWins}-{headToHeadClash.buddyContestedWins} Split W-L)
+                      🏆 LEADING BY {pointDiff} PTS ({headToHeadClash?.myContestedWins || 0}-{headToHeadClash?.buddyContestedWins || 0} Split W-L)
                     </span>
                   )}
                   {headToHeadClash?.seriesLeader === 'BUDDY_LEADING' && (
                     <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/40">
-                      ⚡ TRAILING BY {Math.abs(headToHeadClash.pointDifferential)} PTS ({headToHeadClash.myContestedWins}-{headToHeadClash.buddyContestedWins} Split W-L)
+                      ⚡ TRAILING BY {pointDiff} PTS ({headToHeadClash?.myContestedWins || 0}-{headToHeadClash?.buddyContestedWins || 0} Split W-L)
                     </span>
                   )}
-                  {headToHeadClash?.seriesLeader === 'TIED' && (
+                  {(!headToHeadClash?.seriesLeader || headToHeadClash?.seriesLeader === 'TIED') && (
                     <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-white/10 text-white/80 border border-white/20">
                       ⚔️ SERIES TIED ({headToHeadClash?.myContestedWins || 0}-{headToHeadClash?.buddyContestedWins || 0} Split W-L)
                     </span>
@@ -455,23 +461,23 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
               {/* Right Fighter: RIVAL */}
               <div className="flex items-center space-x-3.5 bg-black/40 p-3.5 rounded-2xl border border-white/10 justify-end text-right">
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-black text-indigo-400 uppercase truncate">{selectedBuddy.display_name}</div>
-                  <div className="text-xs text-white/60 font-semibold truncate">{selectedBuddy.favorite_team}</div>
+                  <div className="text-xs font-black text-indigo-400 uppercase truncate">{buddyName}</div>
+                  <div className="text-xs text-white/60 font-semibold truncate">{buddyTeam}</div>
                   <div className="flex items-center justify-end space-x-2 mt-1">
                     <span className="text-xs font-black text-indigo-300 font-mono">
-                      {buddySeasonRecord?.totalPoints || 0} PTS
+                      {buddySeasonRecord?.totalPoints || selectedBuddy?.total_points || 0} PTS
                     </span>
                     <span className="text-xs font-black text-white font-mono bg-white/10 px-1.5 py-0.5 rounded">
-                      {buddySeasonRecord?.wins || 0}-{buddySeasonRecord?.losses || 0} ({buddySeasonRecord?.winRate || 0}%)
+                      {buddySeasonRecord?.wins || selectedBuddy?.correct_picks || 0}-{buddySeasonRecord?.losses || ((selectedBuddy?.total_picks || 0) - (selectedBuddy?.correct_picks || 0)) || 0} ({buddySeasonRecord?.winRate || 0}%)
                     </span>
                   </div>
                 </div>
                 <div className="relative shrink-0">
-                  {selectedBuddy.avatar_url ? (
-                    <img src={selectedBuddy.avatar_url} alt={selectedBuddy.display_name} className="w-14 h-14 rounded-2xl object-cover ring-2 ring-indigo-500 shadow-lg" />
+                  {buddyAvatar ? (
+                    <img src={buddyAvatar} alt={buddyName} className="w-14 h-14 rounded-2xl object-cover ring-2 ring-indigo-500 shadow-lg" />
                   ) : (
                     <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-black text-xl shadow-lg ring-2 ring-indigo-500">
-                      {selectedBuddy.display_name?.charAt(0) || 'B'}
+                      {buddyName.charAt(0) || 'B'}
                     </div>
                   )}
                   <span className="absolute -bottom-1 -right-1 text-[9px] font-black bg-indigo-500 text-white px-1.5 py-0.2 rounded-full border border-black">
@@ -528,7 +534,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
             <div className="flex items-center space-x-1.5 bg-black/60 p-1.5 rounded-2xl border border-white/10 shadow-inner">
               <button
                 onClick={() => setFilterMode('ALL')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
                   filterMode === 'ALL'
                     ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20'
                     : 'text-white/60 hover:text-white'
@@ -538,7 +544,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
               </button>
               <button
                 onClick={() => setFilterMode('DISAGREED')}
-                className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+                className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
                   filterMode === 'DISAGREED'
                     ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
                     : 'text-orange-400 hover:bg-white/5'
@@ -549,7 +555,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
               </button>
               <button
                 onClick={() => setFilterMode('AGREED')}
-                className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+                className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
                   filterMode === 'AGREED'
                     ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20'
                     : 'text-emerald-400 hover:bg-white/5'
@@ -561,7 +567,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
               {lockClashes.length > 0 && (
                 <button
                   onClick={() => setFilterMode('LOCKS')}
-                  className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+                  className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
                     filterMode === 'LOCKS'
                       ? 'bg-amber-400 text-black shadow-lg shadow-amber-400/20 animate-pulse'
                       : 'text-amber-300 hover:bg-white/5'
@@ -677,7 +683,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
                       }`}>
                         <div className="flex items-center justify-between mb-1.5">
                           <span className="text-[10px] uppercase font-bold text-indigo-400">
-                            {selectedBuddy?.display_name || 'RIVAL'}'S PICK
+                            {buddyName}'S PICK
                           </span>
                           {buddyPick?.confidence_points && (
                             <span className="text-[10px] text-indigo-300 font-bold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
