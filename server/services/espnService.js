@@ -254,11 +254,7 @@ class EspnService {
 
       // Filter by conference if specified
       if (confKey !== 'ALL') {
-        if (confKey === 'TOP25') {
-          allGames = allGames.filter(g => (g.homeTeam.rank !== null && g.homeTeam.rank <= 25) || (g.awayTeam.rank !== null && g.awayTeam.rank <= 25));
-        } else if (CONFERENCE_TEAMS[confKey]) {
-          allGames = this.filterByConference(allGames, confKey);
-        }
+        allGames = this.filterByConference(allGames, confKey);
       }
 
       return allGames;
