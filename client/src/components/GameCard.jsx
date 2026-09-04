@@ -6,45 +6,47 @@ import {
 import confetti from 'canvas-confetti';
 
 export function GameCard({ game, onPick, isSaving }) {
-  const [selectedTeamId, setSelectedTeamId] = useState(
-    game.userPick?.predicted_winner_id || null
-  );
-  const [confidence, setConfidence] = useState(
-    game.userPick?.confidence_points || 1
-  );
-
-  useEffect(() => {
-    if (game.userPick?.predicted_winner_id) {
-      setSelectedTeamId(game.userPick.predicted_winner_id);
-    }
-    if (game.userPick?.confidence_points) {
-      setConfidence(game.userPick.confidence_points);
-    }
-  }, [game.userPick?.predicted_winner_id, game.userPick?.confidence_points]);
-
   const home = game.homeTeam;
   const away = game.awayTeam;
   const userPick = game.userPick;
+
+  const pickId = userPick?.predicted_winner_id || userPick?.predictedWinnerId || null;
+  const pickName = userPick?.predicted_winner_name || userPick?.predictedWinnerName || null;
+  const pickConfidence = userPick?.confidence_points || userPick?.confidencePoints || 1;
+
+  const [selectedTeamId, setSelectedTeamId] = useState(pickId);
+  const [confidence, setConfidence] = useState(pickConfidence);
+
+  useEffect(() => {
+    if (pickId) {
+      setSelectedTeamId(pickId);
+    }
+    if (pickConfidence) {
+      setConfidence(pickConfidence);
+    }
+  }, [pickId, pickConfidence]);
 
   const isFinal = game.isFinal;
   const isInProgress = game.isInProgress;
   const hasPick = !!userPick || !!selectedTeamId;
 
-  const effectiveWinnerId = selectedTeamId || game.userPick?.predicted_winner_id || null;
-  const effectiveWinnerName = game.userPick?.predicted_winner_name || null;
+  const effectiveWinnerId = selectedTeamId || pickId || null;
+  const effectiveWinnerName = pickName || null;
 
   const isAwaySelected = !!(effectiveWinnerId && (
     effectiveWinnerId === away.id ||
-    effectiveWinnerId === away.name ||
-    effectiveWinnerName === away.name ||
-    (away.espnId && String(effectiveWinnerId) === String(away.espnId))
+    (away.name && effectiveWinnerId.toLowerCase() === away.name.toLowerCase()) ||
+    (effectiveWinnerName && away.name && (effectiveWinnerName.toLowerCase() === away.name.toLowerCase() || effectiveWinnerName.toLowerCase().includes(away.name.toLowerCase()))) ||
+    (away.espnId && String(effectiveWinnerId) === String(away.espnId)) ||
+    (away.abbreviation && effectiveWinnerId.toUpperCase() === away.abbreviation.toUpperCase())
   ));
 
   const isHomeSelected = !!(effectiveWinnerId && (
     effectiveWinnerId === home.id ||
-    effectiveWinnerId === home.name ||
-    effectiveWinnerName === home.name ||
-    (home.espnId && String(effectiveWinnerId) === String(home.espnId))
+    (home.name && effectiveWinnerId.toLowerCase() === home.name.toLowerCase()) ||
+    (effectiveWinnerName && home.name && (effectiveWinnerName.toLowerCase() === home.name.toLowerCase() || effectiveWinnerName.toLowerCase().includes(home.name.toLowerCase()))) ||
+    (home.espnId && String(effectiveWinnerId) === String(home.espnId)) ||
+    (home.abbreviation && effectiveWinnerId.toUpperCase() === home.abbreviation.toUpperCase())
   ));
 
   const handleSelectWinner = (teamId, teamName) => {

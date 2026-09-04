@@ -32,18 +32,28 @@ router.get('/', optionalAuth, async (req, res) => {
     if (req.user) {
       const picks = await db.prepare(`
         SELECT * FROM picks 
-        WHERE user_id = ? AND (season_year = ? OR season_year = ?) AND week_number = ?
-      `).all(req.user.id, year, String(year), week);
+        WHERE user_id = ? AND (season_year = ? OR season_year = ?)
+      `).all(req.user.id, year, String(year));
 
       for (const p of picks) {
         userPicksMap[p.game_id] = p;
       }
     }
 
-    const gamesWithPicks = games.map(g => ({
-      ...g,
-      userPick: userPicksMap[g.id] || null
-    }));
+    const gamesWithPicks = games.map(g => {
+      const p = userPicksMap[g.id] || null;
+      return {
+        ...g,
+        userPick: p ? {
+          ...p,
+          gameId: p.game_id,
+          predictedWinnerId: p.predicted_winner_id,
+          predictedWinnerName: p.predicted_winner_name,
+          confidencePoints: p.confidence_points,
+          confidenceLevel: p.confidence_level
+        } : null
+      };
+    });
 
     return res.json({
       season: scoreboard.season,
