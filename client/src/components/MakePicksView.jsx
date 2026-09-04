@@ -90,23 +90,84 @@ export function MakePicksView() {
   async function loadWeeklyGames() {
     setLoadingGames(true);
     try {
-      const data = await api.getGames({
-        year: 2026,
-        week: selectedWeek,
-        conference: weekConference
-      });
-      const rawGames = data?.games || [];
-      // Seamlessly merge with localStorage picks as instant offline / client backup
+      // 1. Fetch base games & live ESPN feed in parallel
+      const [gamesData, espnEvents] = await Promise.all([
+        api.getGames({
+          year: 2026,
+          week: selectedWeek,
+          conference: weekConference
+        }),
+        fetch('https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&limit=100')
+          .then(r => r.ok ? r.json() : null)
+          .then(d => d?.events || [])
+          .catch(() => [])
+      ]);
+
+      const rawGames = gamesData?.games || [];
+
+      // Helper function to clean strings for robust matching
+      const cleanStr = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+      // Seamlessly merge with real-time live scores and localStorage picks
       const merged = rawGames.map(g => {
-        if (g.userPick && g.userPick.predicted_winner_id) return g;
-        try {
-          const local = localStorage.getItem(`cfb_local_pick_${g.seasonYear || 2026}_${g.id}`);
-          if (local) {
-            return { ...g, userPick: JSON.parse(local) };
+        let updatedGame = { ...g };
+
+        // Match with ESPN live scores
+        if (espnEvents.length > 0 && g.homeTeam && g.awayTeam) {
+          const gHomeClean = cleanStr(g.homeTeam.name);
+          const gAwayClean = cleanStr(g.awayTeam.name);
+
+          const liveMatch = espnEvents.find(e => {
+            const comp = e.competitions?.[0] || {};
+            const competitors = comp.competitors || [];
+            const h = competitors.find(c => c.homeAway === 'home') || {};
+            const a = competitors.find(c => c.homeAway === 'away') || {};
+            const eHomeClean = cleanStr(h.team?.displayName || h.team?.name);
+            const eAwayClean = cleanStr(a.team?.displayName || a.team?.name);
+
+            return (
+              (eHomeClean.includes(gHomeClean) || gHomeClean.includes(eHomeClean) || eHomeClean.includes(cleanStr(g.homeTeam.id))) &&
+              (eAwayClean.includes(gAwayClean) || gAwayClean.includes(eAwayClean) || eAwayClean.includes(cleanStr(g.awayTeam.id)))
+            );
+          });
+
+          if (liveMatch) {
+            const comp = liveMatch.competitions?.[0] || {};
+            const competitors = comp.competitors || [];
+            const hComp = competitors.find(c => c.homeAway === 'home') || {};
+            const aComp = competitors.find(c => c.homeAway === 'away') || {};
+            const state = liveMatch.status?.type?.state;
+            const isLive = state === 'in';
+            const isFinal = state === 'post';
+
+            updatedGame.isLive = isLive;
+            updatedGame.isInProgress = isLive;
+            updatedGame.isFinal = isFinal;
+            updatedGame.statusDetail = liveMatch.status?.type?.detail || (isFinal ? 'Final' : (isLive ? 'LIVE' : 'Scheduled'));
+            updatedGame.homeTeam = {
+              ...g.homeTeam,
+              score: parseInt(hComp.score ?? g.homeTeam.score ?? 0, 10)
+            };
+            updatedGame.awayTeam = {
+              ...g.awayTeam,
+              score: parseInt(aComp.score ?? g.awayTeam.score ?? 0, 10)
+            };
           }
-        } catch (e) {}
-        return g;
+        }
+
+        // Merge localStorage user pick if not yet saved on server
+        if (!updatedGame.userPick || !updatedGame.userPick.predicted_winner_id) {
+          try {
+            const local = localStorage.getItem(`cfb_local_pick_${updatedGame.seasonYear || 2026}_${updatedGame.id}`);
+            if (local) {
+              updatedGame.userPick = JSON.parse(local);
+            }
+          } catch (e) {}
+        }
+
+        return updatedGame;
       });
+
       setWeeklyGames(merged);
     } catch (err) {
       console.error('Failed to load weekly games:', err);

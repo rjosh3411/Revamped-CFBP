@@ -274,7 +274,7 @@ class EspnService {
     }
 
     try {
-      const url = 'https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?limit=100';
+      const url = 'https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&limit=100';
       const data = await this.fetchJson(url);
 
       if (data && data.events && Array.isArray(data.events) && data.events.length > 0) {

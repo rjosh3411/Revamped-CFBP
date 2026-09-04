@@ -102,10 +102,10 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
   useEffect(() => {
     loadScoreboard(false);
 
-    // Continuous real-time auto-refresh every 20 seconds
+    // Continuous real-time auto-refresh every 15 seconds
     pollTimerRef.current = setInterval(() => {
       loadScoreboard(true);
-    }, 20000);
+    }, 15000);
 
     return () => {
       if (pollTimerRef.current) {
@@ -117,24 +117,40 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
   async function loadScoreboard(isBackground = false) {
     if (!isBackground) setIsRefreshing(true);
     try {
-      // 1. Try Live Tracker route first for real-time ESPN scores
-      let gamesList = [];
+      let rawEvents = [];
+
+      // 1. Primary: Direct ESPN Scoreboard fetch from client (super-fast, real-time CORS enabled)
       try {
-        const liveRes = await api.getLiveTracker();
-        if (liveRes && liveRes.games && liveRes.games.length > 0) {
-          gamesList = liveRes.games;
+        const espnRes = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&limit=100');
+        if (espnRes.ok) {
+          const espnJson = await espnRes.json();
+          if (espnJson && Array.isArray(espnJson.events) && espnJson.events.length > 0) {
+            rawEvents = espnJson.events;
+          }
         }
-      } catch (err) {
-        console.warn('Live tracker endpoint error, using standard schedule:', err);
+      } catch (e) {
+        console.warn('Direct ESPN fetch failed, falling back to server route:', e);
       }
 
-      // 2. Fallback to standard games endpoint if live-tracker returned empty
-      if (gamesList.length === 0) {
+      // 2. Secondary: Fallback to backend live-tracker route
+      if (rawEvents.length === 0) {
+        try {
+          const liveRes = await api.getLiveTracker();
+          if (liveRes && liveRes.games && liveRes.games.length > 0) {
+            rawEvents = liveRes.games;
+          }
+        } catch (err) {
+          console.warn('Server live tracker route failed:', err);
+        }
+      }
+
+      // 3. Tertiary: Fallback to standard 2026 week 1 games
+      if (rawEvents.length === 0) {
         const gamesData = await api.getGames({ year: 2026, week: 1 });
-        gamesList = gamesData?.games || [];
+        rawEvents = gamesData?.games || [];
       }
 
-      // 3. User picks
+      // User picks
       let userPicksData = [];
       if (user) {
         try {
@@ -145,34 +161,33 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
         }
       }
 
-      const todayStr = new Date().toDateString();
       const seenMatchups = new Set();
-      const filtered = [];
+      const liveList = [];
+      const finalList = [];
+      const scheduledList = [];
 
-      for (const rawGame of gamesList) {
+      for (const rawGame of rawEvents) {
         const details = extractGameDetails(rawGame);
         if (!details) continue;
 
-        const isToday = details.date ? new Date(details.date).toDateString() === todayStr : false;
-
-        // Show live games, games scheduled/played today, or featured week 1 games
         const key = `${details.home.name.toLowerCase()}_${details.away.name.toLowerCase()}`;
-        if (!seenMatchups.has(key)) {
-          seenMatchups.add(key);
-          filtered.push({ rawGame, details });
+        if (seenMatchups.has(key)) continue;
+        seenMatchups.add(key);
+
+        const item = { rawGame, details };
+        if (details.isLive) {
+          liveList.push(item);
+        } else if (details.isFinal) {
+          finalList.push(item);
+        } else {
+          scheduledList.push(item);
         }
       }
 
-      // Prioritize LIVE games first, then in-progress/final, then scheduled
-      filtered.sort((a, b) => {
-        if (a.details.isLive && !b.details.isLive) return -1;
-        if (!a.details.isLive && b.details.isLive) return 1;
-        if (a.details.isFinal && !b.details.isFinal) return -1;
-        if (!a.details.isFinal && b.details.isFinal) return 1;
-        return 0;
-      });
+      // Priority: Active LIVE games first, followed by Recent Finals, followed by Upcoming Today/Week 1
+      const combined = [...liveList, ...finalList, ...scheduledList];
 
-      setLiveGames(filtered.slice(0, 15));
+      setLiveGames(combined.slice(0, 20));
       setUserPicks(userPicksData);
       setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     } catch (err) {
