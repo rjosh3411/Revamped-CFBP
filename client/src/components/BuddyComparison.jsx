@@ -6,6 +6,35 @@ import {
   Flame, Sparkles, Award, ArrowRightLeft, Filter, AlertCircle, ChevronDown, Check, Swords, Copy
 } from 'lucide-react';
 
+function cleanStr(s) {
+  return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function resolvePickToTeam(pick, homeTeam, awayTeam) {
+  if (!pick) return null;
+  const pId = String(pick.predicted_winner_id || pick.predictedWinnerId || '').toLowerCase().trim();
+  const pName = String(pick.predicted_winner_name || pick.predictedWinnerName || '').toLowerCase().trim();
+  const pClean = cleanStr(pName || pId);
+
+  const hId = String(homeTeam?.id || '').toLowerCase().trim();
+  const hName = String(homeTeam?.name || '').toLowerCase().trim();
+  const hAbbr = String(homeTeam?.abbreviation || '').toLowerCase().trim();
+  const hClean = cleanStr(hName);
+
+  const aId = String(awayTeam?.id || '').toLowerCase().trim();
+  const aName = String(awayTeam?.name || '').toLowerCase().trim();
+  const aAbbr = String(awayTeam?.abbreviation || '').toLowerCase().trim();
+  const aClean = cleanStr(aName);
+
+  if (pId && (pId === hId || (homeTeam?.espnId && pId === String(homeTeam.espnId)))) return 'HOME';
+  if (pId && (pId === aId || (awayTeam?.espnId && pId === String(awayTeam.espnId)))) return 'AWAY';
+
+  if (pClean && hClean && (pClean === hClean || pClean.includes(hClean) || hClean.includes(pClean) || pClean === cleanStr(hAbbr) || pClean === cleanStr(hId))) return 'HOME';
+  if (pClean && aClean && (pClean === aClean || pClean.includes(aClean) || aClean.includes(pClean) || pClean === cleanStr(aAbbr) || pClean === cleanStr(aId))) return 'AWAY';
+
+  return pClean;
+}
+
 export function BuddyComparison({ parties, currentWeek, currentYear }) {
   const { user } = useAuth();
   const [selectedPartyId, setSelectedPartyId] = useState(parties?.[0]?.id || '');
@@ -50,8 +79,31 @@ export function BuddyComparison({ parties, currentWeek, currentYear }) {
   const selectedParty = (parties || []).find(p => p.id === selectedPartyId) || comparisonData?.party;
   const buddies = comparisonData?.buddies || [];
   const selectedBuddy = comparisonData?.selectedBuddy;
-  const summary = comparisonData?.summary || { totalCompared: 0, agreedCount: 0, disagreedCount: 0, agreementRate: 0 };
-  const comparisons = comparisonData?.comparisons || [];
+  const comparisons = (comparisonData?.comparisons || []).map(c => {
+    if (c.myPick && c.buddyPick && c.game) {
+      const mySide = resolvePickToTeam(c.myPick, c.game.homeTeam, c.game.awayTeam);
+      const buddySide = resolvePickToTeam(c.buddyPick, c.game.homeTeam, c.game.awayTeam);
+      const isAgreed = mySide && buddySide && mySide === buddySide;
+      return {
+        ...c,
+        comparisonStatus: isAgreed ? 'AGREED' : 'DISAGREED'
+      };
+    }
+    return c;
+  });
+
+  const agreedCount = comparisons.filter(c => c.comparisonStatus === 'AGREED').length;
+  const disagreedCount = comparisons.filter(c => c.comparisonStatus === 'DISAGREED').length;
+  const totalCompared = agreedCount + disagreedCount;
+  const agreementRate = totalCompared > 0 ? Math.round((agreedCount / totalCompared) * 100) : 0;
+
+  const summary = {
+    ...comparisonData?.summary,
+    totalCompared,
+    agreedCount,
+    disagreedCount,
+    agreementRate
+  };
 
   const handleCopyCode = () => {
     if (selectedParty?.invite_code) {

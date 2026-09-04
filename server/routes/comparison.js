@@ -217,6 +217,39 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
     // If no picks made yet, show top scheduled games for the week
     const targetGames = gamesWithPicks.length > 0 ? gamesWithPicks : allWeekGames.slice(0, 15);
 
+function cleanStr(s) {
+  return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function resolvePickToTeam(pick, homeTeam, awayTeam) {
+  if (!pick) return null;
+  const pId = String(pick.predicted_winner_id || '').toLowerCase().trim();
+  const pName = String(pick.predicted_winner_name || '').toLowerCase().trim();
+  const pClean = cleanStr(pName || pId);
+
+  const hId = String(homeTeam?.id || '').toLowerCase().trim();
+  const hName = String(homeTeam?.name || '').toLowerCase().trim();
+  const hAbbr = String(homeTeam?.abbreviation || '').toLowerCase().trim();
+  const hClean = cleanStr(hName);
+
+  const aId = String(awayTeam?.id || '').toLowerCase().trim();
+  const aName = String(awayTeam?.name || '').toLowerCase().trim();
+  const aAbbr = String(awayTeam?.abbreviation || '').toLowerCase().trim();
+  const aClean = cleanStr(aName);
+
+  // Exact ID match
+  if (pId && (pId === hId || (homeTeam?.espnId && pId === String(homeTeam.espnId)))) return 'HOME';
+  if (pId && (pId === aId || (awayTeam?.espnId && pId === String(awayTeam.espnId)))) return 'AWAY';
+
+  // Name or abbreviation matching on home
+  if (pClean && hClean && (pClean === hClean || pClean.includes(hClean) || hClean.includes(pClean) || pClean === cleanStr(hAbbr) || pClean === cleanStr(hId))) return 'HOME';
+  
+  // Name or abbreviation matching on away
+  if (pClean && aClean && (pClean === aClean || pClean.includes(aClean) || aClean.includes(pClean) || pClean === cleanStr(aAbbr) || pClean === cleanStr(aId))) return 'AWAY';
+
+  return pClean;
+}
+
     const gameComparisons = targetGames.map(g => {
       const myPick = myPicksMap.get(g.id) || null;
       const buddyPick = selectedBuddy ? (buddyPicksMap.get(g.id) || null) : null;
@@ -227,10 +260,10 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
 
       if (myPick && buddyPick) {
         totalCompared++;
-        const myWinner = (myPick.predicted_winner_name || myPick.predicted_winner_id || '').toLowerCase();
-        const buddyWinner = (buddyPick.predicted_winner_name || buddyPick.predicted_winner_id || '').toLowerCase();
+        const myTeamSide = resolvePickToTeam(myPick, g.homeTeam, g.awayTeam);
+        const buddyTeamSide = resolvePickToTeam(buddyPick, g.homeTeam, g.awayTeam);
 
-        if (myWinner === buddyWinner || myPick.predicted_winner_id === buddyPick.predicted_winner_id) {
+        if (myTeamSide && buddyTeamSide && myTeamSide === buddyTeamSide) {
           comparisonStatus = 'AGREED';
           agreedCount++;
         } else {
@@ -239,8 +272,8 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
         }
 
         if (g.isFinal && g.winnerId) {
-          const myCorrect = myPick.predicted_winner_id === g.winnerId;
-          const buddyCorrect = buddyPick.predicted_winner_id === g.winnerId;
+          const myCorrect = myPick.predicted_winner_id === g.winnerId || myPick.is_correct === 1;
+          const buddyCorrect = buddyPick.predicted_winner_id === g.winnerId || buddyPick.is_correct === 1;
 
           if (myCorrect && buddyCorrect) headToHeadResult = 'BOTH_CORRECT';
           else if (!myCorrect && !buddyCorrect) headToHeadResult = 'BOTH_INCORRECT';
@@ -261,13 +294,11 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
       }
 
       const homePicksCount = allPicksForGame.filter(p => {
-        const pName = (p.predicted_winner_name || '').toLowerCase();
-        return p.predicted_winner_id === g.homeTeam.id || pName.includes(g.homeTeam.name.toLowerCase());
+        return resolvePickToTeam(p, g.homeTeam, g.awayTeam) === 'HOME';
       }).length;
 
       const awayPicksCount = allPicksForGame.filter(p => {
-        const pName = (p.predicted_winner_name || '').toLowerCase();
-        return p.predicted_winner_id === g.awayTeam.id || pName.includes(g.awayTeam.name.toLowerCase());
+        return resolvePickToTeam(p, g.homeTeam, g.awayTeam) === 'AWAY';
       }).length;
 
       const totalPartyPicks = homePicksCount + awayPicksCount;
