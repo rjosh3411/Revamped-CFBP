@@ -252,28 +252,11 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
             // Determine if user made a pick on this game
             let pickBadge = null;
             if (pick) {
-              const pickedHome = (pick.predicted_winner_name || '').toLowerCase().includes(home.fullName.toLowerCase()) || 
-                                 (pick.predicted_winner_name || '').toLowerCase() === home.abbr.toLowerCase() ||
-                                 (pick.predicted_winner_id && String(pick.predicted_winner_id) === String(home.id));
-              const pointDiff = Math.abs(home.score - away.score);
-              const isHomeWinning = home.score > away.score;
-              const isAwayWinning = away.score > home.score;
-
               if (isFinal) {
                 if (pick.is_correct === 1 || (details.winnerId && String(details.winnerId) === String(pick.predicted_winner_id))) {
                   pickBadge = <span className="text-[9px] text-[#86efac] font-black bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/40">✓ WON</span>;
                 } else {
                   pickBadge = <span className="text-[9px] text-[#fca5a5] font-black bg-red-950/80 px-1.5 py-0.5 rounded border border-red-500/40">✗ LOSS</span>;
-                }
-              } else if (isLive) {
-                const isLeading = (pickedHome && isHomeWinning) || (!pickedHome && isAwayWinning);
-                const isTied = home.score === away.score;
-                if (isTied) {
-                  pickBadge = <span className="text-[9px] text-amber-300 font-bold bg-amber-950/60 px-1.5 py-0.5 rounded">TIED</span>;
-                } else {
-                  pickBadge = isLeading 
-                    ? <span className="text-[9px] text-[#86efac] font-black bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/40 animate-pulse">🟢 +{pointDiff}</span>
-                    : <span className="text-[9px] text-[#fca5a5] font-black bg-red-950/80 px-1.5 py-0.5 rounded border border-red-500/40">🔴 -{pointDiff}</span>;
                 }
               } else {
                 pickBadge = (
