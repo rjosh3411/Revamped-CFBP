@@ -169,16 +169,16 @@ class EspnService {
     };
   }
 
-  async get2026SeasonGames(year = 2026, week = 1, conference = 'ALL') {
-    const confKey = conference.toUpperCase();
-    const normalizedWeek = week > 14 ? (week === 15 ? 15 : 1) : week;
+  async get2026SeasonGames(year = 2026, week = 0, conference = 'ALL') {
+    const confKey = (conference || 'ALL').toUpperCase();
+    const queryWeek = parseInt(week !== undefined ? week : 0, 10);
 
     try {
       const schedules = await db.prepare(`
         SELECT * FROM team_schedules 
         WHERE (season_year = ? OR season_year = ?) AND (week_number = ? OR week_number = ?)
         ORDER BY game_date ASC
-      `).all(year, String(year), week, normalizedWeek);
+      `).all(year, String(year), queryWeek, String(queryWeek));
 
       if (!schedules || schedules.length === 0) {
         return [];
@@ -194,7 +194,7 @@ class EspnService {
         const homeTeam = isHome ? thisTeam : oppTeam;
         const awayTeam = isHome ? oppTeam : thisTeam;
 
-        const pairKey = [homeTeam.id, awayTeam.id].sort().join('___') + '_w' + week;
+        const pairKey = [homeTeam.id, awayTeam.id].sort().join('___') + '_w' + queryWeek;
 
         if (!gameMap.has(pairKey)) {
           const odds = calculateBettingLine({
@@ -205,9 +205,9 @@ class EspnService {
           });
 
           gameMap.set(pairKey, {
-            id: s.game_id || `game_2026_w${week}_${homeTeam.id}_vs_${awayTeam.id}`,
+            id: s.game_id || `game_2026_w${queryWeek}_${homeTeam.id}_vs_${awayTeam.id}`,
             seasonYear: year,
-            weekNumber: week,
+            weekNumber: queryWeek,
             date: s.game_date || '2026-09-05T19:00:00Z',
             name: `${awayTeam.name} at ${homeTeam.name}`,
             shortName: `${awayTeam.abbreviation || awayTeam.name} @ ${homeTeam.abbreviation || homeTeam.name}`,
@@ -264,24 +264,25 @@ class EspnService {
     }
   }
 
-  async getScoreboard({ year = 2026, week = 1, seasonType = 2, conference = 'ALL', forceRefresh = false } = {}) {
-    const confKey = conference.toUpperCase();
-    const cacheKey = `scoreboard_${year}_w${week}_st${seasonType}_${confKey}`;
+  async getScoreboard({ year = 2026, week = 0, seasonType = 2, conference = 'ALL', forceRefresh = false } = {}) {
+    const confKey = (conference || 'ALL').toUpperCase();
+    const queryWeek = parseInt(week !== undefined ? week : 0, 10);
+    const cacheKey = `scoreboard_${year}_w${queryWeek}_st${seasonType}_${confKey}`;
     const cached = this.memoryCache.get(cacheKey);
 
     if (!forceRefresh && cached && (Date.now() - cached.timestamp < this.cacheExpiry)) {
       return cached.data;
     }
 
-    // For 2026 season schedules, load authentic 2026 week matchups
-    const season2026Games = await this.get2026SeasonGames(year, week, conference);
-    if (season2026Games && season2026Games.length > 0) {
+    // For 2026 season schedules, strictly load authentic 2026 week matchups
+    if (year === 2026 || year === '2026') {
+      const season2026Games = await this.get2026SeasonGames(year, queryWeek, conference);
       const result = {
-        season: { year, type: seasonType },
-        week: { number: week },
+        season: { year: 2026, type: seasonType },
+        week: { number: queryWeek },
         conference,
-        games: season2026Games,
-        total: season2026Games.length,
+        games: season2026Games || [],
+        total: (season2026Games || []).length,
         fromLiveEspn: false,
         source: 'Official 2026 College Football Schedule'
       };

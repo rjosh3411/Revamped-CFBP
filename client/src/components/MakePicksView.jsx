@@ -67,7 +67,7 @@ export function MakePicksView() {
   const [pickMode, setPickMode] = useState('WEEK');
   
   // Week Mode State
-  const [selectedWeek, setSelectedWeek] = useState(1);
+  const [selectedWeek, setSelectedWeek] = useState(0);
   const [weekConference, setWeekConference] = useState('ALL');
   const [weeklyGames, setWeeklyGames] = useState([]);
   const [loadingGames, setLoadingGames] = useState(false);

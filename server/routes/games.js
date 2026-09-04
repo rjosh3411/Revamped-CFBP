@@ -9,7 +9,7 @@ const db = require('../db/database');
 router.get('/', optionalAuth, async (req, res) => {
   try {
     const year = parseInt(req.query.year || 2026, 10);
-    const week = parseInt(req.query.week || 1, 10);
+    const week = req.query.week !== undefined ? parseInt(req.query.week, 10) : 0;
     const seasonType = parseInt(req.query.seasonType || 2, 10);
     const conference = (req.query.conference || 'ALL').toUpperCase();
     const forceRefresh = req.query.refresh === 'true';
