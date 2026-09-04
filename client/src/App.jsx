@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { api } from './utils/api';
 import { useAuth } from './context/AuthContext';
 import { Navbar } from './components/Navbar';
-import { KineticGameDayTicker } from './components/KineticGameDayTicker';
 import { LiveScoreboardRibbon } from './components/LiveScoreboardRibbon';
 import { MakePicksView } from './components/MakePicksView';
 import { BuddyComparison } from './components/BuddyComparison';
@@ -13,7 +12,6 @@ import {
   Trophy, CheckCircle2, AlertCircle, RefreshCw, 
   Flame, Sparkles, Shield, Users, ArrowRight, Zap 
 } from 'lucide-react';
-import confetti from 'canvas-confetti';
 
 export function App() {
   const { user, refreshUser } = useAuth();
@@ -23,7 +21,6 @@ export function App() {
   const [currentWeek, setCurrentWeek] = useState(1);
   const [parties, setParties] = useState([]);
   const [selectedPartyCode, setSelectedPartyCode] = useState('');
-  const [isSyncing, setIsSyncing] = useState(false);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
@@ -47,24 +44,6 @@ export function App() {
       console.error('Failed to load parties:', err);
     }
   }
-
-  const handleSyncEspn = async () => {
-    setIsSyncing(true);
-    try {
-      await api.syncEspn({ year: 2026, week: currentWeek });
-      await refreshUser();
-      await loadParties();
-      showToast('⚡ Live ESPN scores synced & predictions graded!');
-      try {
-        confetti({ particleCount: 30, spread: 60, origin: { y: 0.2 } });
-      } catch (e) {}
-    } catch (err) {
-      console.error('ESPN Sync error:', err);
-      showToast('ESPN Sync failed: ' + err.message, 'error');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   const handlePartyCreated = (newParty) => {
     setParties(prev => [newParty, ...prev]);
@@ -105,18 +84,9 @@ export function App() {
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onSync={handleSyncEspn}
-        isSyncing={isSyncing}
         parties={parties}
         selectedPartyCode={selectedPartyCode}
         onSelectPartyCode={(code) => setSelectedPartyCode(code)}
-      />
-
-      {/* Cinematic Kinetic Game Day Marquee Ticker */}
-      <KineticGameDayTicker
-        onSelectMatchup={(item) => {
-          setActiveTab('picks');
-        }}
       />
 
       {/* Live Scoreboard Ribbon */}
@@ -156,10 +126,7 @@ export function App() {
 
         {/* TAB 3: STANDINGS & NATIONAL POLLS */}
         {activeTab === 'standings' && (
-          <StandingsView
-            onSync={handleSyncEspn}
-            isSyncing={isSyncing}
-          />
+          <StandingsView />
         )}
 
         {/* TAB 4: PARTY HUB (Prediction Parties, Leaderboard, Trash Talk & Leave Party) */}

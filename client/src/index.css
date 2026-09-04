@@ -38,6 +38,17 @@
     letter-spacing: 0.5px;
     font-weight: 700;
   }
+
+  select {
+    color-scheme: dark;
+  }
+
+  select option {
+    background-color: #0c1017;
+    color: #faf6e8;
+    padding: 8px 12px;
+    font-weight: 600;
+  }
 }
 
 /* Custom modern scrollbar */

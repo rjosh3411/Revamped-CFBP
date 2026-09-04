@@ -259,36 +259,42 @@ export function BuddyComparison({ parties, currentWeek, currentYear }) {
           <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
             {/* Party Selector */}
             <div className="relative flex-1 sm:flex-none">
-              <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Prediction Party</label>
-              <select
-                value={selectedPartyId}
-                onChange={(e) => {
-                  setSelectedPartyId(e.target.value);
-                  setSelectedBuddyId('');
-                }}
-                className="w-full sm:w-56 bg-slate-800 text-white text-xs font-bold px-3 py-2.5 rounded-xl border border-slate-700 focus:outline-none focus:border-amber-400 transition"
-              >
-                {parties.map(p => (
-                  <option key={p.id} value={p.id}>{p.icon} {p.name}</option>
-                ))}
-              </select>
+              <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1.5 tracking-wider">Prediction Party</label>
+              <div className="relative group">
+                <select
+                  value={selectedPartyId}
+                  onChange={(e) => {
+                    setSelectedPartyId(e.target.value);
+                    setSelectedBuddyId('');
+                  }}
+                  className="w-full sm:w-64 appearance-none bg-[#090d14]/90 hover:bg-[#121824] text-white text-xs font-bold pl-3.5 pr-10 py-2.5 rounded-2xl border border-white/10 hover:border-amber-400/50 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 shadow-xl transition backdrop-blur-md cursor-pointer"
+                >
+                  {parties.map(p => (
+                    <option key={p.id} value={p.id} className="bg-[#0e1218] text-white py-1.5">{p.icon} {p.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="w-4 h-4 text-amber-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 group-hover:opacity-100 transition" />
+              </div>
             </div>
 
             {/* Buddy Selector */}
             {buddies.length > 0 && (
               <div className="relative flex-1 sm:flex-none">
-                <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Compare Against Buddy</label>
-                <select
-                  value={selectedBuddyId}
-                  onChange={(e) => setSelectedBuddyId(e.target.value)}
-                  className="w-full sm:w-56 bg-slate-800 text-white text-xs font-bold px-3 py-2.5 rounded-xl border border-slate-700 focus:outline-none focus:border-amber-400 transition"
-                >
-                  {buddies.map(b => (
-                    <option key={b.id} value={b.id}>
-                      👤 {b.display_name} ({b.favorite_team})
-                    </option>
-                  ))}
-                </select>
+                <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1.5 tracking-wider">Compare Against Buddy</label>
+                <div className="relative group">
+                  <select
+                    value={selectedBuddyId}
+                    onChange={(e) => setSelectedBuddyId(e.target.value)}
+                    className="w-full sm:w-64 appearance-none bg-[#090d14]/90 hover:bg-[#121824] text-white text-xs font-bold pl-3.5 pr-10 py-2.5 rounded-2xl border border-white/10 hover:border-indigo-400/50 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 shadow-xl transition backdrop-blur-md cursor-pointer"
+                  >
+                    {buddies.map(b => (
+                      <option key={b.id} value={b.id} className="bg-[#0e1218] text-white py-1.5">
+                        👤 {b.display_name} ({b.favorite_team})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-indigo-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 group-hover:opacity-100 transition" />
+                </div>
               </div>
             )}
           </div>

@@ -4,7 +4,7 @@ import { api } from '../utils/api';
 import { Interactive3DPlayer } from './Interactive3DPlayer';
 import { 
   Zap, Trophy, Flame, Shield, Award, Sparkles, 
-  Crown, Star, CheckCircle2, Lock, Edit3, Shirt, RefreshCw, ChevronRight, Check
+  Crown, Star, CheckCircle2, Lock, Edit3, Shirt, RefreshCw, ChevronRight, Check, ChevronDown 
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -242,15 +242,18 @@ export function PlayerEvolutionView() {
 
             <div>
               <label className="block text-[#9a978a] font-bold uppercase text-[10px] mb-1">Favorite School</label>
-              <select
-                value={favoriteSchool}
-                onChange={(e) => setFavoriteSchool(e.target.value)}
-                className="w-full bg-black text-white px-3 py-2 rounded-xl border border-white/10 focus:border-amber-400 focus:outline-none font-bold"
-              >
-                {TEAMS_LIST.map(t => (
-                  <option key={t} value={t} className="bg-[#0e1218]">{t}</option>
-                ))}
-              </select>
+              <div className="relative group">
+                <select
+                  value={favoriteSchool}
+                  onChange={(e) => setFavoriteSchool(e.target.value)}
+                  className="w-full appearance-none bg-black text-white text-xs pl-3 pr-8 py-2 rounded-xl border border-white/10 hover:border-amber-400/50 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 focus:outline-none font-bold transition cursor-pointer"
+                >
+                  {TEAMS_LIST.map(t => (
+                    <option key={t} value={t} className="bg-[#0e1218]">{t}</option>
+                  ))}
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 text-amber-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 group-hover:opacity-100 transition" />
+              </div>
             </div>
 
             <div className="flex items-end">

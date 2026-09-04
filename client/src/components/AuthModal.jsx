@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { 
   Lock, Mail, User, ShieldCheck, Trophy, 
-  X, Check, AlertCircle, Sparkles, Heart 
+  X, Check, AlertCircle, Sparkles, Heart, ChevronDown 
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -188,18 +188,19 @@ export function AuthModal() {
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">Favorite School / Team</label>
-                <div className="relative">
+                <label className="block text-slate-300 font-bold text-xs uppercase tracking-wider mb-1.5">Favorite School / Team</label>
+                <div className="relative group">
+                  <Heart className="w-3.5 h-3.5 text-rose-500 absolute left-3 top-1/2 -translate-y-1/2 z-10" />
                   <select
                     value={favoriteTeam}
                     onChange={(e) => setFavoriteTeam(e.target.value)}
-                    className="w-full bg-slate-950 text-white pl-8 pr-3 py-2.5 rounded-xl border border-slate-800 focus:border-sky-400 focus:ring-1 focus:ring-sky-400/40 focus:outline-none font-medium"
+                    className="w-full appearance-none bg-slate-950 text-white pl-9 pr-9 py-2.5 rounded-xl border border-slate-800 hover:border-amber-400/50 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 focus:outline-none font-medium transition cursor-pointer"
                   >
                     {POPULAR_TEAMS.map(team => (
-                      <option key={team} value={team}>{team}</option>
+                      <option key={team} value={team} className="bg-slate-900 text-white py-1">{team}</option>
                     ))}
                   </select>
-                  <Heart className="w-3.5 h-3.5 text-rose-500 absolute left-2.5 top-3" />
+                  <ChevronDown className="w-4 h-4 text-amber-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 group-hover:opacity-100 transition" />
                 </div>
               </div>
             </>

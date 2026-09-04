@@ -1,34 +1,34 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { 
-  Trophy, Users, Flame, RefreshCw, LogIn, UserPlus, 
-  ChevronDown, Shield, Sparkles, CheckCircle2, Award, Calendar 
+  Trophy, Users, Flame, LogIn, UserPlus, 
+  ChevronDown, Shield, Sparkles, CheckCircle2, Award, Calendar, Swords
 } from 'lucide-react';
 
-export function Navbar({ activeTab, setActiveTab, onSync, isSyncing, parties, selectedPartyCode, onSelectPartyCode }) {
-  const { user, openAuth, logout, switchDemo, demoUsers } = useAuth();
+export function Navbar({ activeTab, setActiveTab, parties, selectedPartyCode, onSelectPartyCode }) {
+  const { user, logout } = useAuth();
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
 
   const navItems = [
-    { id: 'picks', label: 'Make Picks', icon: Trophy },
-    { id: 'compare', label: 'Bud Comparison', icon: Users },
-    { id: 'standings', label: 'Standings & Polls', icon: Award },
-    { id: 'parties', label: 'Party Hub', icon: Sparkles }
+    { id: 'picks', label: 'Make Picks', icon: CheckCircle2 },
+    { id: 'compare', label: 'Split Rivalry', icon: Swords },
+    { id: 'standings', label: 'Standings', icon: Trophy },
+    { id: 'parties', label: 'Party Hub', icon: Users },
   ];
 
   return (
     <>
       {/* Top Header */}
-      <header className="sticky top-0 z-40 bg-[#090c10]/95 backdrop-blur-md border-b border-white/10 shadow-2xl">
+      <header className="sticky top-0 z-40 bg-black/85 backdrop-blur-xl border-b border-white/10 shadow-2xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Left: Logo & Party Selector */}
+          <div className="flex items-center justify-between h-16 sm:h-18">
+            {/* Logo & Brand */}
             <div className="flex items-center space-x-3">
               <div 
-                className="flex items-center space-x-2.5 cursor-pointer"
                 onClick={() => setActiveTab('picks')}
+                className="flex items-center space-x-2.5 cursor-pointer group"
               >
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-xl shadow-lg shadow-amber-500/20">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-xl shadow-lg shadow-amber-500/20 group-hover:scale-105 transition">
                   🏈
                 </div>
                 <div>
@@ -38,26 +38,29 @@ export function Navbar({ activeTab, setActiveTab, onSync, isSyncing, parties, se
                 </div>
               </div>
 
-              {/* Active Party Pill / Selector */}
+              {/* Active Party Pill / Modern Selector */}
               {parties && parties.length > 0 && (
-                <div className="hidden sm:flex items-center ml-2">
-                  <select
-                    value={selectedPartyCode || parties[0]?.invite_code}
-                    onChange={(e) => onSelectPartyCode && onSelectPartyCode(e.target.value)}
-                    className="bg-black/60 text-[#faf6e8] text-xs font-bold px-3 py-1.5 rounded-xl border border-white/10 focus:border-amber-400 focus:outline-none cursor-pointer"
-                  >
-                    {parties.map(p => (
-                      <option key={p.id} value={p.invite_code} className="bg-[#0e1218] text-white">
-                        🎉 PARTY: {p.invite_code} ({p.name.slice(0, 16)}...)
-                      </option>
-                    ))}
-                  </select>
+                <div className="hidden sm:flex items-center ml-2 relative">
+                  <div className="relative group">
+                    <select
+                      value={selectedPartyCode || parties[0]?.invite_code}
+                      onChange={(e) => onSelectPartyCode && onSelectPartyCode(e.target.value)}
+                      className="appearance-none bg-[#090d14]/90 hover:bg-[#121824] text-[#faf6e8] text-xs font-bold pl-3 pr-8 py-1.5 rounded-xl border border-white/10 hover:border-amber-400/50 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 focus:outline-none cursor-pointer transition shadow-md backdrop-blur-md"
+                    >
+                      {parties.map(p => (
+                        <option key={p.id} value={p.invite_code} className="bg-[#0e1218] text-white">
+                          🎉 {p.name.length > 20 ? p.name.slice(0, 18) + '...' : p.name} ({p.invite_code})
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-3.5 h-3.5 text-amber-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 group-hover:opacity-100 transition" />
+                  </div>
                 </div>
               )}
             </div>
 
             {/* Desktop Navigation Tabs */}
-            <nav className="hidden lg:flex items-center space-x-1 bg-black/60 p-1 rounded-2xl border border-white/10">
+            <nav className="hidden lg:flex items-center space-x-1 bg-black/60 p-1 rounded-2xl border border-white/10 shadow-inner">
               {navItems.map(item => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
@@ -80,17 +83,6 @@ export function Navbar({ activeTab, setActiveTab, onSync, isSyncing, parties, se
 
             {/* Right Action buttons */}
             <div className="flex items-center space-x-2.5">
-              {/* ESPN Live Sync Button */}
-              <button
-                onClick={onSync}
-                disabled={isSyncing}
-                title="Sync live scores, rankings & auto-grade picks from ESPN"
-                className="flex items-center space-x-1.5 bg-black/60 hover:bg-black text-[#dcd8c8] px-3 py-1.5 rounded-xl text-xs font-bold border border-white/10 shadow-sm transition disabled:opacity-50"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${isSyncing ? 'animate-spin' : ''}`} />
-                <span className="hidden md:inline">{isSyncing ? 'Syncing...' : 'Sync ESPN'}</span>
-              </button>
-
               {/* User Profile / Quick Switcher */}
               {user ? (
                 <div className="relative">

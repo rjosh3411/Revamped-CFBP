@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { 
   Users, Trophy, Plus, Copy, Check, Send, Flame, 
   Crown, Shield, Sparkles, MessageSquare, ArrowRight, LogOut, Trash2,
-  CheckCircle2, Target, DollarSign, Star, TrendingUp 
+  CheckCircle2, Target, DollarSign, Star, TrendingUp, ChevronDown 
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -608,35 +608,41 @@ export function PartyHub({ parties, onPartyCreated, onPartyJoined, onPartyLeft, 
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[#faf6e8] font-bold mb-1">Conference Focus</label>
-                  <select
-                    value={newPartyConf}
-                    onChange={(e) => setNewPartyConf(e.target.value)}
-                    className="w-full bg-black text-white p-3 rounded-xl border border-white/10 focus:border-amber-400 focus:outline-none font-bold"
-                  >
-                    <option value="ALL">All FBS & Top 25</option>
-                    <option value="SEC">SEC Only</option>
-                    <option value="BIGTEN">Big Ten Only</option>
-                    <option value="ACC">ACC Only</option>
-                    <option value="BIG12">Big 12 Only</option>
-                  </select>
+                  <label className="block text-[#faf6e8] text-xs font-bold uppercase tracking-wider mb-1.5">Conference Focus</label>
+                  <div className="relative group">
+                    <select
+                      value={newPartyConf}
+                      onChange={(e) => setNewPartyConf(e.target.value)}
+                      className="w-full appearance-none bg-[#090d14] text-white text-xs font-bold pl-3.5 pr-9 py-3 rounded-2xl border border-white/10 hover:border-amber-400/50 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 focus:outline-none transition cursor-pointer"
+                    >
+                      <option value="ALL">All FBS & Top 25</option>
+                      <option value="SEC">SEC Only</option>
+                      <option value="BIGTEN">Big Ten Only</option>
+                      <option value="ACC">ACC Only</option>
+                      <option value="BIG12">Big 12 Only</option>
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-amber-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 group-hover:opacity-100 transition" />
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-[#faf6e8] font-bold mb-1">Party Icon</label>
-                  <select
-                    value={newPartyIcon}
-                    onChange={(e) => setNewPartyIcon(e.target.value)}
-                    className="w-full bg-black text-white p-3 rounded-xl border border-white/10 focus:border-amber-400 focus:outline-none font-bold"
-                  >
-                    <option value="🏈">🏈 Football</option>
-                    <option value="🏆">🏆 Trophy</option>
-                    <option value="🎯">🎯 Target (ATS)</option>
-                    <option value="🔥">🔥 Fire</option>
-                    <option value="👑">👑 Crown</option>
-                  </select>
+                  <label className="block text-[#faf6e8] text-xs font-bold uppercase tracking-wider mb-1.5">Party Icon</label>
+                  <div className="relative group">
+                    <select
+                      value={newPartyIcon}
+                      onChange={(e) => setNewPartyIcon(e.target.value)}
+                      className="w-full appearance-none bg-[#090d14] text-white text-xs font-bold pl-3.5 pr-9 py-3 rounded-2xl border border-white/10 hover:border-amber-400/50 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 focus:outline-none transition cursor-pointer"
+                    >
+                      <option value="🏈">🏈 Football</option>
+                      <option value="🏆">🏆 Trophy</option>
+                      <option value="🎯">🎯 Target (ATS)</option>
+                      <option value="🔥">🔥 Fire</option>
+                      <option value="👑">👑 Crown</option>
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-amber-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 group-hover:opacity-100 transition" />
+                  </div>
                 </div>
               </div>
 
