@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle2, XCircle, Clock, Tv, MapPin, 
   Flame, Lock, Award, ChevronRight, Sparkles 
@@ -13,13 +13,39 @@ export function GameCard({ game, onPick, isSaving }) {
     game.userPick?.confidence_points || 1
   );
 
+  useEffect(() => {
+    if (game.userPick?.predicted_winner_id) {
+      setSelectedTeamId(game.userPick.predicted_winner_id);
+    }
+    if (game.userPick?.confidence_points) {
+      setConfidence(game.userPick.confidence_points);
+    }
+  }, [game.userPick?.predicted_winner_id, game.userPick?.confidence_points]);
+
   const home = game.homeTeam;
   const away = game.awayTeam;
   const userPick = game.userPick;
 
   const isFinal = game.isFinal;
   const isInProgress = game.isInProgress;
-  const hasPick = !!userPick;
+  const hasPick = !!userPick || !!selectedTeamId;
+
+  const effectiveWinnerId = selectedTeamId || game.userPick?.predicted_winner_id || null;
+  const effectiveWinnerName = game.userPick?.predicted_winner_name || null;
+
+  const isAwaySelected = !!(effectiveWinnerId && (
+    effectiveWinnerId === away.id ||
+    effectiveWinnerId === away.name ||
+    effectiveWinnerName === away.name ||
+    (away.espnId && String(effectiveWinnerId) === String(away.espnId))
+  ));
+
+  const isHomeSelected = !!(effectiveWinnerId && (
+    effectiveWinnerId === home.id ||
+    effectiveWinnerId === home.name ||
+    effectiveWinnerName === home.name ||
+    (home.espnId && String(effectiveWinnerId) === String(home.espnId))
+  ));
 
   const handleSelectWinner = (teamId, teamName) => {
     setSelectedTeamId(teamId);
@@ -76,9 +102,9 @@ export function GameCard({ game, onPick, isSaving }) {
   return (
     <div className={`relative rounded-2xl bg-slate-900/90 border transition-all duration-200 shadow-xl overflow-hidden ${
       hasPick 
-        ? userPick.is_correct === 1
+        ? userPick?.is_correct === 1
           ? 'border-emerald-500/60 shadow-emerald-500/10'
-          : userPick.is_correct === 0
+          : userPick?.is_correct === 0
             ? 'border-red-500/60 shadow-red-500/10'
             : 'border-amber-500/50 shadow-amber-500/10'
         : 'border-slate-800 hover:border-slate-700'
@@ -123,7 +149,7 @@ export function GameCard({ game, onPick, isSaving }) {
           <button
             onClick={() => handleSelectWinner(away.id, away.name)}
             className={`group text-left p-3.5 rounded-xl border transition-all duration-200 flex items-center justify-between relative overflow-hidden ${
-              selectedTeamId === away.id
+              isAwaySelected
                 ? 'bg-amber-500/15 border-amber-400 ring-2 ring-amber-400/40 shadow-lg shadow-amber-500/10'
                 : 'bg-slate-800/60 hover:bg-slate-800 border-slate-700/70 hover:border-slate-600'
             }`}
@@ -179,7 +205,7 @@ export function GameCard({ game, onPick, isSaving }) {
               )}
 
               <div className={`w-7 h-7 rounded-full flex items-center justify-center border transition ${
-                selectedTeamId === away.id
+                isAwaySelected
                   ? 'bg-amber-500 text-slate-950 border-amber-400 font-black scale-110 shadow'
                   : 'border-slate-600 text-transparent group-hover:border-slate-400'
               }`}>
@@ -192,7 +218,7 @@ export function GameCard({ game, onPick, isSaving }) {
           <button
             onClick={() => handleSelectWinner(home.id, home.name)}
             className={`group text-left p-3.5 rounded-xl border transition-all duration-200 flex items-center justify-between relative overflow-hidden ${
-              selectedTeamId === home.id
+              isHomeSelected
                 ? 'bg-amber-500/15 border-amber-400 ring-2 ring-amber-400/40 shadow-lg shadow-amber-500/10'
                 : 'bg-slate-800/60 hover:bg-slate-800 border-slate-700/70 hover:border-slate-600'
             }`}
@@ -248,7 +274,7 @@ export function GameCard({ game, onPick, isSaving }) {
               )}
 
               <div className={`w-7 h-7 rounded-full flex items-center justify-center border transition ${
-                selectedTeamId === home.id
+                isHomeSelected
                   ? 'bg-amber-500 text-slate-950 border-amber-400 font-black scale-110 shadow'
                   : 'border-slate-600 text-transparent group-hover:border-slate-400'
               }`}>

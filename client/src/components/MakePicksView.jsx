@@ -95,7 +95,19 @@ export function MakePicksView() {
         week: selectedWeek,
         conference: weekConference
       });
-      setWeeklyGames(data?.games || []);
+      const rawGames = data?.games || [];
+      // Seamlessly merge with localStorage picks as instant offline / client backup
+      const merged = rawGames.map(g => {
+        if (g.userPick && g.userPick.predicted_winner_id) return g;
+        try {
+          const local = localStorage.getItem(`cfb_local_pick_${g.seasonYear || 2026}_${g.id}`);
+          if (local) {
+            return { ...g, userPick: JSON.parse(local) };
+          }
+        } catch (e) {}
+        return g;
+      });
+      setWeeklyGames(merged);
     } catch (err) {
       console.error('Failed to load weekly games:', err);
     } finally {
@@ -145,8 +157,33 @@ export function MakePicksView() {
   }
 
   const handlePick = async (pickData) => {
+    // 1. Instant local storage persistence so picks are NEVER lost across reloads
+    try {
+      localStorage.setItem(`cfb_local_pick_${pickData.seasonYear || 2026}_${pickData.gameId}`, JSON.stringify({
+        game_id: pickData.gameId,
+        predicted_winner_id: pickData.predictedWinnerId,
+        predicted_winner_name: pickData.predictedWinnerName,
+        confidence_points: pickData.confidencePoints || 1
+      }));
+    } catch (e) {}
+
+    // 2. Update local state immediately
+    setWeeklyGames(prev => prev.map(g => {
+      if (g.id === pickData.gameId) {
+        return {
+          ...g,
+          userPick: {
+            ...g.userPick,
+            predicted_winner_id: pickData.predictedWinnerId,
+            predicted_winner_name: pickData.predictedWinnerName,
+            confidence_points: pickData.confidencePoints || 1
+          }
+        };
+      }
+      return g;
+    }));
+
     if (!user) {
-      alert('Please sign in or create an account to save your predictions!');
       return;
     }
 
@@ -160,22 +197,6 @@ export function MakePicksView() {
         predictedWinnerName: pickData.predictedWinnerName,
         confidencePoints: pickData.confidencePoints || 1
       });
-
-      // Update local game state
-      setWeeklyGames(prev => prev.map(g => {
-        if (g.id === pickData.gameId) {
-          return {
-            ...g,
-            userPick: {
-              ...g.userPick,
-              predicted_winner_id: pickData.predictedWinnerId,
-              predicted_winner_name: pickData.predictedWinnerName,
-              confidence_points: pickData.confidencePoints || 1
-            }
-          };
-        }
-        return g;
-      }));
     } catch (err) {
       console.error('Failed to save pick:', err);
     } finally {

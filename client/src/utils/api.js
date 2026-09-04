@@ -68,6 +68,10 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(pickData)
   }),
+  savePick: (pickData) => request('/picks', {
+    method: 'POST',
+    body: JSON.stringify(pickData)
+  }),
   bulkSubmitPicks: (picks) => request('/picks/bulk', {
     method: 'POST',
     body: JSON.stringify({ picks })
