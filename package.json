@@ -7,7 +7,7 @@
     "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
     "server:dev": "node --watch server/index.js",
     "build": "npm --prefix client run build && rm -rf dist && cp -r client/dist dist",
-    "vercel-build": "npm --prefix client install && npm --prefix client run build && rm -rf dist && cp -r client/dist dist",
+    "vercel-build": "npm --prefix client run build && rm -rf dist && cp -r client/dist dist",
     "start": "node server/index.js",
     "seed": "node server/db/seed.js"
   },
