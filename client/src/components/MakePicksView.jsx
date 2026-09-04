@@ -91,17 +91,30 @@ export function MakePicksView() {
   async function loadWeeklyGames() {
     setLoadingGames(true);
     try {
-      // 1. Fetch base games & live ESPN feed in parallel
+      // 1. Fetch base games & live ESPN feed in parallel with 1.5s timeout
+      const fetchEspnLive = async () => {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 1500);
+          const r = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&limit=100', {
+            signal: controller.signal
+          });
+          clearTimeout(timer);
+          if (r.ok) {
+            const d = await r.json();
+            return d?.events || [];
+          }
+        } catch (e) {}
+        return [];
+      };
+
       const [gamesData, espnEvents] = await Promise.all([
         api.getGames({
           year: 2026,
           week: selectedWeek,
           conference: weekConference
         }),
-        fetch('https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&limit=100')
-          .then(r => r.ok ? r.json() : null)
-          .then(d => d?.events || [])
-          .catch(() => [])
+        fetchEspnLive()
       ]);
 
       const rawGames = gamesData?.games || [];

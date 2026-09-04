@@ -139,9 +139,14 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
     try {
       let rawEvents = [];
 
-      // 1. Primary: Direct ESPN Scoreboard fetch with groups=80 (all FBS games)
+      // 1. Primary: Direct ESPN Scoreboard fetch with groups=80 (all FBS games) with 1.5s timeout
       try {
-        const espnRes = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&limit=100');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1500);
+        const espnRes = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&limit=100', {
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
         if (espnRes.ok) {
           const espnJson = await espnRes.json();
           if (espnJson && Array.isArray(espnJson.events) && espnJson.events.length > 0) {
@@ -149,7 +154,7 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
           }
         }
       } catch (e) {
-        console.warn('Direct ESPN fetch warning:', e);
+        // Fast fallback to cached data if ESPN times out
       }
 
       // 2. Secondary: Fallback to backend live-tracker route
