@@ -224,12 +224,44 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
     if (p.game_id) picksMap.set(String(p.game_id), p);
   });
 
+  const [isPaused, setIsPaused] = useState(false);
+
   // Duplicate the games array to create an infinite seamless loop
   const marqueeGames = [...liveGames, ...liveGames];
 
   return (
-    <div className="w-full bg-[#080b0f] border-b border-amber-500/20 py-2 relative z-30 shadow-2xl select-none overflow-hidden scoreboard-mask group">
-      <div className="animate-scoreboard-marquee flex items-center space-x-3 px-2">
+    <div 
+      className="w-full bg-[#080b0f] border-b border-amber-500/20 py-2 relative z-30 shadow-2xl select-none overflow-hidden scoreboard-mask group"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+      onTouchStart={() => setIsPaused(true)}
+      onTouchEnd={() => setIsPaused(false)}
+    >
+      <style>{`
+        @keyframes scoreboard-marquee-flow {
+          0% { transform: translate3d(0, 0, 0); }
+          100% { transform: translate3d(-50%, 0, 0); }
+        }
+        .scoreboard-marquee-track {
+          display: flex;
+          width: max-content;
+          will-change: transform;
+          animation: scoreboard-marquee-flow 45s linear infinite;
+        }
+        .scoreboard-marquee-track.paused {
+          animation-play-state: paused !important;
+        }
+      `}</style>
+      <div 
+        className={`scoreboard-marquee-track ${isPaused ? 'paused' : ''} flex items-center px-2`}
+        style={{
+          display: 'flex',
+          width: 'max-content',
+          gap: '12px',
+          animation: 'scoreboard-marquee-flow 45s linear infinite',
+          animationPlayState: isPaused ? 'paused' : 'running'
+        }}
+      >
         {marqueeGames.map(({ rawGame, details }, idx) => {
           const pick = picksMap.get(String(details.id)) || details.userPick;
           const { home, away, isLive, isFinal, broadcast, possession } = details;
