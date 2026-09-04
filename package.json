@@ -3,11 +3,7 @@
   "version": "1.0.0",
   "description": "College Football Predictions App with Prediction Parties, Buddy Comparison, and Live ESPN AP Poll Rankings",
   "main": "server/index.js",
-  "workspaces": [
-    "client"
-  ],
   "scripts": {
-    "postinstall": "npm --prefix client install",
     "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
     "server:dev": "node --watch server/index.js",
     "build": "npm --prefix client run build && rm -rf dist && cp -r client/dist dist",
