@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const db = require('../db/database');
+const gradingService = require('../services/gradingService');
 const { authenticateToken } = require('../middleware/auth');
 
 // GET /api/picks/my-picks
@@ -9,6 +10,9 @@ router.get('/my-picks', authenticateToken, async (req, res) => {
   try {
     const year = parseInt(req.query.year || 2026, 10);
     const week = parseInt(req.query.week || 1, 10);
+
+    // Auto-sync any concluded games before returning picks
+    await gradingService.syncAndGradeLiveScores().catch(e => console.warn('Picks grading warning:', e));
 
     const picks = await db.prepare(`
       SELECT p.*, g.status as game_status, g.home_team_name, g.away_team_name, g.home_team_score, g.away_team_score, g.winner_team_id
@@ -29,6 +33,9 @@ router.get('/my-stats', authenticateToken, async (req, res) => {
   try {
     const year = parseInt(req.query.year || 2026, 10);
     const userId = req.user.id;
+
+    // Auto-sync any concluded games before returning latest statistics
+    await gradingService.syncAndGradeLiveScores().catch(e => console.warn('Stats grading warning:', e));
 
     const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
 

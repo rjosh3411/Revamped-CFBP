@@ -148,6 +148,27 @@ class GradingService {
     const gameIds = Array.from(gameMap.keys());
     if (gameIds.length === 0) return { gradedCount: 0 };
 
+    // Sync final scores into team_schedules
+    for (const g of finalGames) {
+      try {
+        if (g.homeTeam && g.awayTeam && g.homeTeam.score !== undefined && g.awayTeam.score !== undefined) {
+          const hScore = parseInt(g.homeTeam.score || 0, 10);
+          const aScore = parseInt(g.awayTeam.score || 0, 10);
+          await db.prepare(`
+            UPDATE team_schedules
+            SET status = 'STATUS_FINAL',
+                status_detail = 'Final',
+                team_score = CASE WHEN is_home = 1 THEN ? ELSE ? END,
+                opponent_score = CASE WHEN is_home = 1 THEN ? ELSE ? END,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE game_id = ?
+          `).run(hScore, aScore, aScore, hScore, g.id);
+        }
+      } catch (e) {
+        // non-blocking
+      }
+    }
+
     const placeholders = gameIds.map(() => '?').join(',');
     const picksToGrade = await db.prepare(`
       SELECT * FROM picks 
@@ -190,6 +211,22 @@ class GradingService {
       affectedUsers: affectedUserIds.size,
       finalGamesCount: finalGames.length
     };
+  }
+
+  /**
+   * Syncs latest ESPN live scoreboard and automatically grades all completed games.
+   */
+  async syncAndGradeLiveScores() {
+    try {
+      const espnService = require('./espnService');
+      const live = await espnService.getLiveScoreboard();
+      if (live && live.games && live.games.length > 0) {
+        return await this.gradeFinishedGames(live.games);
+      }
+    } catch (err) {
+      console.warn('Live score sync warning:', err.message);
+    }
+    return { gradedCount: 0 };
   }
 
   /**

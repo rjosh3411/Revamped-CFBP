@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const db = require('../db/database');
+const gradingService = require('../services/gradingService');
 const { authenticateToken } = require('../middleware/auth');
 
 function generatePartyCode(prefix = 'CFB') {
@@ -179,6 +180,9 @@ router.post('/:id/leave', authenticateToken, async (req, res) => {
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const partyId = req.params.id;
+
+    // Auto-sync live scores before calculating party leaderboard
+    await gradingService.syncAndGradeLiveScores().catch(e => console.warn('Party grading warning:', e));
     const party = await db.prepare(`
       SELECT p.*, u.display_name as creator_name
       FROM parties p

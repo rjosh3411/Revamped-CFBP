@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db/database');
 const { TEAMS_2026 } = require('../db/teamsData');
 const { calculateBettingLine } = require('../services/oddsService');
+const gradingService = require('../services/gradingService');
 const { authenticateToken } = require('../middleware/auth');
 
 // GET /api/comparison/party/:partyId
@@ -12,6 +13,9 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
     const year = parseInt(req.query.year || 2026, 10);
     const week = parseInt(req.query.week || 1, 10);
     const buddyId = req.query.buddyId;
+
+    // Auto-sync live scores and grade completed matchups
+    await gradingService.syncAndGradeLiveScores().catch(e => console.warn('Comparison grading warning:', e));
 
     // Check party membership & details
     const party = await db.prepare('SELECT * FROM parties WHERE id = ?').get(partyId);
