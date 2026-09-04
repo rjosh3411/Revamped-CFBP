@@ -150,7 +150,7 @@ function arePicksAgreed(pickA, pickB, homeTeam, awayTeam) {
   return false;
 }
 
-export function BuddyComparison({ parties, currentWeek, currentYear }) {
+export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2026 }) {
   const { user } = useAuth();
   const [selectedPartyId, setSelectedPartyId] = useState(parties?.[0]?.id || '');
   const [selectedBuddyId, setSelectedBuddyId] = useState('');
@@ -167,25 +167,25 @@ export function BuddyComparison({ parties, currentWeek, currentYear }) {
 
   useEffect(() => {
     if (selectedPartyId) {
-      loadComparison();
+      loadComparison(selectedPartyId, selectedBuddyId);
     }
   }, [selectedPartyId, selectedBuddyId, currentWeek, currentYear]);
 
-  async function loadComparison() {
-    if (!selectedPartyId) return;
+  async function loadComparison(pId = selectedPartyId, bId = selectedBuddyId) {
+    if (!pId) return;
     setLoading(true);
     try {
-      const data = await api.getBuddyComparison(selectedPartyId, {
+      const data = await api.getBuddyComparison(pId, {
         year: currentYear || 2026,
         week: currentWeek || 1,
-        buddyId: selectedBuddyId || undefined
+        buddyId: bId || undefined
       });
       setComparisonData(data);
       if (data.selectedBuddy && !selectedBuddyId) {
         setSelectedBuddyId(data.selectedBuddy.id);
       }
     } catch (err) {
-      console.error('Failed to load buddy comparison:', err);
+      console.warn('Failed to load buddy comparison:', err);
     } finally {
       setLoading(false);
     }
@@ -278,8 +278,10 @@ export function BuddyComparison({ parties, currentWeek, currentYear }) {
                 <select
                   value={selectedPartyId}
                   onChange={(e) => {
-                    setSelectedPartyId(e.target.value);
+                    const newPartyId = e.target.value;
+                    setSelectedPartyId(newPartyId);
                     setSelectedBuddyId('');
+                    loadComparison(newPartyId, '');
                   }}
                   className="w-full sm:w-64 appearance-none bg-[#090d14]/90 hover:bg-[#121824] text-white text-xs font-bold pl-3.5 pr-10 py-2.5 rounded-2xl border border-white/10 hover:border-amber-400/50 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 shadow-xl transition backdrop-blur-md cursor-pointer"
                 >
@@ -306,11 +308,14 @@ export function BuddyComparison({ parties, currentWeek, currentYear }) {
 
             <div className="flex items-center space-x-2.5 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-white/10">
               {rivalryRoster.map(b => {
-                const isSelected = selectedBuddyId === b.id;
+                const isSelected = (selectedBuddyId === b.id) || (!selectedBuddyId && selectedBuddy?.id === b.id);
                 return (
                   <button
                     key={b.id}
-                    onClick={() => setSelectedBuddyId(b.id)}
+                    onClick={() => {
+                      setSelectedBuddyId(b.id);
+                      loadComparison(selectedPartyId, b.id);
+                    }}
                     className={`shrink-0 flex items-center space-x-2.5 px-3 py-2 rounded-2xl border transition-all duration-200 text-left ${
                       isSelected
                         ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 border-amber-400/80 shadow-lg shadow-amber-500/10 scale-102'
@@ -479,8 +484,14 @@ export function BuddyComparison({ parties, currentWeek, currentYear }) {
         )}
       </div>
 
-      {/* EMPTY STATE: When alone in party */}
-      {buddies.length === 0 ? (
+      {/* Loading Skeleton */}
+      {loading && !comparisonData ? (
+        <div className="text-center py-20 text-white/50">
+          <div className="animate-spin w-10 h-10 border-3 border-amber-400 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-sm font-bold uppercase tracking-wider text-amber-400">Loading Head-to-Head Clash Matrix...</p>
+        </div>
+      ) : !loading && comparisonData && buddies.length === 0 ? (
+        /* EMPTY STATE: When alone in party */
         <div className="bg-[#0e1218] border border-white/10 rounded-3xl p-8 sm:p-12 text-center shadow-2xl max-w-xl mx-auto space-y-6 animate-in fade-in duration-200">
           <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-3xl mx-auto shadow-inner">
             👥
@@ -568,10 +579,10 @@ export function BuddyComparison({ parties, currentWeek, currentYear }) {
           </div>
 
           {/* Comparisons Matchup List */}
-          {loading ? (
-            <div className="text-center py-16 text-white/50">
-              <div className="animate-spin w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full mx-auto mb-3"></div>
-              Loading head-to-head matchup matrix...
+          {loading && comparisonData ? (
+            <div className="text-center py-10 text-white/50">
+              <div className="animate-spin w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full mx-auto mb-2"></div>
+              Updating matchup comparison...
             </div>
           ) : filteredComparisons.length === 0 ? (
             <div className="bg-[#0e1218] rounded-3xl p-12 text-center border border-white/10 text-white/50">
