@@ -166,7 +166,7 @@
   display: flex;
   width: max-content;
   will-change: transform;
-  animation: scoreboard-marquee 45s linear infinite;
+  animation: scoreboard-marquee 95s linear infinite;
 }
 
 .animate-scoreboard-marquee:hover,

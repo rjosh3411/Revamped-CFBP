@@ -246,7 +246,7 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
           display: flex;
           width: max-content;
           will-change: transform;
-          animation: scoreboard-marquee-flow 45s linear infinite;
+          animation: scoreboard-marquee-flow 95s linear infinite;
         }
         .scoreboard-marquee-track.paused {
           animation-play-state: paused !important;
@@ -258,7 +258,7 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
           display: 'flex',
           width: 'max-content',
           gap: '12px',
-          animation: 'scoreboard-marquee-flow 45s linear infinite',
+          animation: 'scoreboard-marquee-flow 95s linear infinite',
           animationPlayState: isPaused ? 'paused' : 'running'
         }}
       >
