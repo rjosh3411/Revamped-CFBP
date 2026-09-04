@@ -70,17 +70,48 @@ router.get('/', optionalAuth, async (req, res) => {
   }
 });
 
-// POST /api/games/grade (Trigger grading for completed games)
-router.post('/grade', async (req, res) => {
+// GET /api/games/live-tracker (Real-time ESPN score stream & live updates)
+router.get('/live-tracker', optionalAuth, async (req, res) => {
   try {
-    const year = parseInt(req.body.year || 2026, 10);
-    const week = parseInt(req.body.week || 1, 10);
+    const liveScoreboard = await espnService.getLiveScoreboard();
+    const games = liveScoreboard.games || [];
 
-    const result = await gradingService.gradeCompletedGames(year, week);
-    return res.json({ message: 'Grading complete', ...result });
+    let userPicksMap = {};
+    if (req.user) {
+      const picks = await db.prepare(`
+        SELECT * FROM picks 
+        WHERE user_id = ? AND (season_year = 2026 OR season_year = '2026')
+      `).all(req.user.id);
+
+      for (const p of picks) {
+        userPicksMap[p.game_id] = p;
+      }
+    }
+
+    const gamesWithPicks = games.map(g => {
+      const p = userPicksMap[g.id] || null;
+      return {
+        ...g,
+        userPick: p ? {
+          ...p,
+          gameId: p.game_id,
+          predictedWinnerId: p.predicted_winner_id,
+          predictedWinnerName: p.predicted_winner_name,
+          confidencePoints: p.confidence_points,
+          confidenceLevel: p.confidence_level
+        } : null
+      };
+    });
+
+    return res.json({
+      games: gamesWithPicks,
+      total: gamesWithPicks.length,
+      lastUpdated: liveScoreboard.lastUpdated,
+      source: liveScoreboard.source
+    });
   } catch (err) {
-    console.error('Grading trigger error:', err);
-    return res.status(500).json({ error: 'Failed to grade predictions' });
+    console.error('Live tracker error:', err);
+    return res.status(500).json({ error: 'Failed to fetch live scores' });
   }
 });
 

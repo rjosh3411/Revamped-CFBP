@@ -1,40 +1,49 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 
 function extractGameDetails(g) {
   if (!g) return null;
 
-  // If already normalized
+  // Normalized backend object (from /api/games/live-tracker or /api/games)
   if (g.homeTeam && g.awayTeam) {
-    const isLive = g.isInProgress || g.status === 'STATUS_IN_PROGRESS';
-    const isFinal = g.isFinal || g.status === 'STATUS_FINAL';
+    const isLive = g.isLive || g.isInProgress || g.status === 'STATUS_IN_PROGRESS' || g.statusState === 'in';
+    const isFinal = g.isFinal || g.status === 'STATUS_FINAL' || g.statusState === 'post';
     return {
-      id: g.id || g.game_id,
+      id: g.id || g.game_id || g.gameId,
       home: {
+        id: g.homeTeam.id,
         name: g.homeTeam.name || 'Home Team',
-        logo: g.homeTeam.logo || 'https://a.espncdn.com/i/teamlogos/ncaa/500/7.png',
+        logo: g.homeTeam.logo || `https://a.espncdn.com/i/teamlogos/ncaa/500/${g.homeTeam.id || 7}.png`,
         rank: g.homeTeam.rank || null,
-        score: g.homeTeam.score || 0,
+        score: parseInt(g.homeTeam.score ?? g.home_team_score ?? 0, 10),
         abbr: g.homeTeam.abbreviation || (g.homeTeam.name ? g.homeTeam.name.slice(0, 4) : 'HOME')
       },
       away: {
+        id: g.awayTeam.id,
         name: g.awayTeam.name || 'Away Team',
-        logo: g.awayTeam.logo || 'https://a.espncdn.com/i/teamlogos/ncaa/500/7.png',
+        logo: g.awayTeam.logo || `https://a.espncdn.com/i/teamlogos/ncaa/500/${g.awayTeam.id || 7}.png`,
         rank: g.awayTeam.rank || null,
-        score: g.awayTeam.score || 0,
+        score: parseInt(g.awayTeam.score ?? g.away_team_score ?? 0, 10),
         abbr: g.awayTeam.abbreviation || (g.awayTeam.name ? g.awayTeam.name.slice(0, 4) : 'AWAY')
       },
-      status: g.statusDetail || (isFinal ? 'Final' : (isLive ? 'Live' : 'Scheduled')),
+      status: g.statusDetail || (isFinal ? 'FINAL' : (isLive ? 'LIVE' : 'SCHEDULED')),
+      statusDetail: g.statusDetail || (isFinal ? 'Final' : (isLive ? 'In Progress' : 'Scheduled')),
       isLive,
       isFinal,
+      period: g.period || null,
+      clock: g.clock || null,
+      downDistance: g.downDistance || null,
+      possession: g.possession || null,
       date: g.date || g.game_date || '',
       broadcast: g.broadcast || 'ESPN',
-      winnerId: g.winnerId
+      odds: g.odds || null,
+      winnerId: g.winnerId || (isFinal ? (g.homeTeam.score > g.awayTeam.score ? g.homeTeam.id : g.awayTeam.id) : null),
+      userPick: g.userPick || null
     };
   }
 
-  // If ESPN event format with competitions
+  // ESPN raw event structure fallback
   const comp = g.competitions?.[0] || {};
   const competitors = comp.competitors || [];
   const homeComp = competitors.find(c => c.homeAway === 'home') || competitors[0] || {};
@@ -44,12 +53,14 @@ function extractGameDetails(g) {
   const awayTeamObj = awayComp.team || {};
 
   const statusType = g.status?.type?.name || comp.status?.type?.name || g.status || 'STATUS_SCHEDULED';
-  const isFinal = statusType === 'STATUS_FINAL';
-  const isLive = statusType === 'STATUS_IN_PROGRESS';
+  const statusState = g.status?.type?.state || 'pre';
+  const isFinal = statusState === 'post' || statusType === 'STATUS_FINAL';
+  const isLive = statusState === 'in' || statusType === 'STATUS_IN_PROGRESS';
 
   return {
     id: g.id || g.game_id || comp.id,
     home: {
+      id: homeTeamObj.id,
       name: homeTeamObj.displayName || homeTeamObj.name || g.home_team_name || 'Home Team',
       logo: homeTeamObj.logos?.[0]?.href || homeTeamObj.logo || g.home_team_logo || `https://a.espncdn.com/i/teamlogos/ncaa/500/${homeTeamObj.id || 7}.png`,
       rank: (homeComp.curatedRank?.current && homeComp.curatedRank.current <= 25) ? homeComp.curatedRank.current : (g.home_team_rank || null),
@@ -57,18 +68,26 @@ function extractGameDetails(g) {
       abbr: homeTeamObj.abbreviation || (homeTeamObj.name ? homeTeamObj.name.slice(0, 4) : 'HOME')
     },
     away: {
+      id: awayTeamObj.id,
       name: awayTeamObj.displayName || awayTeamObj.name || g.away_team_name || 'Away Team',
       logo: awayTeamObj.logos?.[0]?.href || awayTeamObj.logo || g.away_team_logo || `https://a.espncdn.com/i/teamlogos/ncaa/500/${awayTeamObj.id || 7}.png`,
       rank: (awayComp.curatedRank?.current && awayComp.curatedRank.current <= 25) ? awayComp.curatedRank.current : (g.away_team_rank || null),
       score: parseInt(awayComp.score || g.away_team_score || 0, 10),
       abbr: awayTeamObj.abbreviation || (awayTeamObj.name ? awayTeamObj.name.slice(0, 4) : 'AWAY')
     },
-    status: g.status?.type?.detail || comp.status?.type?.detail || g.status_detail || (isFinal ? 'Final' : (isLive ? 'Live' : 'Scheduled')),
+    status: g.status?.type?.detail || comp.status?.type?.detail || g.status_detail || (isFinal ? 'FINAL' : (isLive ? 'LIVE' : 'SCHEDULED')),
+    statusDetail: g.status?.type?.detail || comp.status?.type?.detail || (isFinal ? 'Final' : (isLive ? 'In Progress' : 'Scheduled')),
     isLive,
     isFinal,
+    period: g.status?.period || comp.status?.period || null,
+    clock: g.status?.displayClock || comp.status?.displayClock || null,
+    downDistance: comp.situation?.downDistanceText || null,
+    possession: comp.situation?.possession || null,
     date: g.date || comp.date || g.game_date || '',
     broadcast: comp.broadcasts?.[0]?.names?.[0] || g.broadcast || 'ESPN',
-    winnerId: isFinal ? (homeComp.winner ? homeTeamObj.id : awayTeamObj.id) : null
+    odds: comp.odds?.[0]?.details || null,
+    winnerId: isFinal ? (homeComp.winner ? homeTeamObj.id : awayTeamObj.id) : null,
+    userPick: null
   };
 }
 
@@ -76,49 +95,94 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
   const { user } = useAuth();
   const [liveGames, setLiveGames] = useState([]);
   const [userPicks, setUserPicks] = useState([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const pollTimerRef = useRef(null);
 
   useEffect(() => {
-    loadScoreboard();
+    loadScoreboard(false);
+
+    // Continuous real-time auto-refresh every 20 seconds
+    pollTimerRef.current = setInterval(() => {
+      loadScoreboard(true);
+    }, 20000);
+
+    return () => {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+      }
+    };
   }, [user]);
 
-  async function loadScoreboard() {
+  async function loadScoreboard(isBackground = false) {
+    if (!isBackground) setIsRefreshing(true);
     try {
-      const [gamesData, picksData] = await Promise.all([
-        api.getGames({ year: 2026, week: 1 }),
-        user ? api.getMyPicks({ year: 2026, week: 1 }).catch(() => ({ picks: [] })) : Promise.resolve({ picks: [] })
-      ]);
+      // 1. Try Live Tracker route first for real-time ESPN scores
+      let gamesList = [];
+      try {
+        const liveRes = await api.getLiveTracker();
+        if (liveRes && liveRes.games && liveRes.games.length > 0) {
+          gamesList = liveRes.games;
+        }
+      } catch (err) {
+        console.warn('Live tracker endpoint error, using standard schedule:', err);
+      }
 
-      const gList = gamesData?.games || [];
+      // 2. Fallback to standard games endpoint if live-tracker returned empty
+      if (gamesList.length === 0) {
+        const gamesData = await api.getGames({ year: 2026, week: 1 });
+        gamesList = gamesData?.games || [];
+      }
+
+      // 3. User picks
+      let userPicksData = [];
+      if (user) {
+        try {
+          const picksRes = await api.getMyPicks({ year: 2026, week: 1 });
+          userPicksData = picksRes?.picks || [];
+        } catch {
+          userPicksData = [];
+        }
+      }
+
       const todayStr = new Date().toDateString();
-
-      // Filter to ONLY live games or games scheduled for today, and deduplicate
       const seenMatchups = new Set();
       const filtered = [];
 
-      for (const rawGame of gList) {
+      for (const rawGame of gamesList) {
         const details = extractGameDetails(rawGame);
         if (!details) continue;
 
         const isToday = details.date ? new Date(details.date).toDateString() === todayStr : false;
 
-        // ONLY show if game is LIVE in progress or scheduled/played TODAY
-        if (details.isLive || isToday) {
-          const key = `${details.home.name.toLowerCase()}_${details.away.name.toLowerCase()}`;
-          if (!seenMatchups.has(key)) {
-            seenMatchups.add(key);
-            filtered.push({ rawGame, details });
-          }
+        // Show live games, games scheduled/played today, or featured week 1 games
+        const key = `${details.home.name.toLowerCase()}_${details.away.name.toLowerCase()}`;
+        if (!seenMatchups.has(key)) {
+          seenMatchups.add(key);
+          filtered.push({ rawGame, details });
         }
       }
 
-      setLiveGames(filtered);
-      setUserPicks(picksData?.picks || []);
+      // Prioritize LIVE games first, then in-progress/final, then scheduled
+      filtered.sort((a, b) => {
+        if (a.details.isLive && !b.details.isLive) return -1;
+        if (!a.details.isLive && b.details.isLive) return 1;
+        if (a.details.isFinal && !b.details.isFinal) return -1;
+        if (!a.details.isFinal && b.details.isFinal) return 1;
+        return 0;
+      });
+
+      setLiveGames(filtered.slice(0, 15));
+      setUserPicks(userPicksData);
+      setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     } catch (err) {
-      console.warn('Failed to load scoreboard ribbon:', err);
+      console.warn('Failed to load live scores:', err);
+    } finally {
+      if (!isBackground) setIsRefreshing(false);
     }
   }
 
-  // If there are no live games and no games scheduled for today, hide the ticker
+  // If no games, hide ribbon
   if (!liveGames || liveGames.length === 0) {
     return null;
   }
@@ -127,45 +191,74 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
   userPicks.forEach(p => picksMap.set(p.game_id, p));
 
   return (
-    <div className="w-full bg-[#080b0f] border-b border-white/10 py-2 px-4 sm:px-6 relative z-30 shadow-md animate-in fade-in">
+    <div className="w-full bg-[#080b0f] border-b border-white/10 py-2 px-3 sm:px-6 relative z-30 shadow-md select-none animate-in fade-in">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
-        {/* Left Live Badge */}
-        <div className="flex items-center space-x-1.5 flex-shrink-0">
+        {/* Left Live Badge & Live Status */}
+        <div className="flex items-center space-x-2 flex-shrink-0">
           <span className="relative flex h-2.5 w-2.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
           </span>
-          <span className="text-[10px] font-black tracking-wider uppercase text-white font-mono hidden sm:inline">
-            LIVE GAME TRACKER
-          </span>
+          <div className="flex flex-col">
+            <span className="text-[10px] font-black tracking-wider uppercase text-white font-mono leading-none">
+              LIVE TRACKER
+            </span>
+            {lastUpdated && (
+              <span className="text-[8px] text-white/40 font-mono hidden sm:inline leading-tight mt-0.5">
+                UPDATED {lastUpdated}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Horizontal Ticker */}
-        <div className="flex items-center space-x-3 overflow-x-auto py-1 scrollbar-none scroll-smooth">
+        <div className="flex items-center space-x-2.5 overflow-x-auto py-1 scrollbar-none scroll-smooth">
           {liveGames.map(({ rawGame, details }, idx) => {
-            const pick = picksMap.get(details.id);
-            const { home, away, isLive, isFinal, broadcast } = details;
+            const pick = picksMap.get(details.id) || details.userPick;
+            const { home, away, isLive, isFinal, broadcast, statusDetail, period, clock, downDistance, possession } = details;
 
             // Pick outcome status
             let pickBadge = null;
             if (pick) {
               const pickedHome = (pick.predicted_winner_name || '').toLowerCase().includes(home.name.toLowerCase()) || 
-                                 (pick.predicted_winner_name || '').toLowerCase() === home.abbr.toLowerCase();
-              const leadingTeam = home.score > away.score ? 'home' : (away.score > home.score ? 'away' : 'tied');
+                                 (pick.predicted_winner_name || '').toLowerCase() === home.abbr.toLowerCase() ||
+                                 (pick.predicted_winner_id && String(pick.predicted_winner_id) === String(home.id));
+              const pointDiff = Math.abs(home.score - away.score);
+              const isHomeWinning = home.score > away.score;
+              const isAwayWinning = away.score > home.score;
 
               if (isFinal) {
-                if (pick.is_correct === 1 || (details.winnerId && details.winnerId === pick.predicted_winner_id)) {
-                  pickBadge = <span className="text-[9px] text-[#86efac] font-bold">✓ WON</span>;
+                if (pick.is_correct === 1 || (details.winnerId && String(details.winnerId) === String(pick.predicted_winner_id))) {
+                  pickBadge = <span className="text-[9px] text-[#86efac] font-black bg-emerald-950/60 px-1 py-0.5 rounded border border-emerald-500/30">✓ WON</span>;
                 } else {
-                  pickBadge = <span className="text-[9px] text-[#fca5a5] font-bold">✗ LOSS</span>;
+                  pickBadge = <span className="text-[9px] text-[#fca5a5] font-black bg-red-950/60 px-1 py-0.5 rounded border border-red-500/30">✗ LOSS</span>;
                 }
               } else if (isLive) {
-                const isLeading = (pickedHome && leadingTeam === 'home') || (!pickedHome && leadingTeam === 'away');
-                pickBadge = isLeading 
-                  ? <span className="text-[9px] text-[#86efac] font-bold">🟢 LEADING</span>
-                  : <span className="text-[9px] text-[#fca5a5] font-bold">🔴 TRAILING</span>;
+                const isLeading = (pickedHome && isHomeWinning) || (!pickedHome && isAwayWinning);
+                const isTied = home.score === away.score;
+                if (isTied) {
+                  pickBadge = <span className="text-[9px] text-amber-300 font-bold bg-amber-950/50 px-1 py-0.5 rounded">TIED</span>;
+                } else {
+                  pickBadge = isLeading 
+                    ? <span className="text-[9px] text-[#86efac] font-bold bg-emerald-950/60 px-1 py-0.5 rounded border border-emerald-500/30">🟢 +{pointDiff}</span>
+                    : <span className="text-[9px] text-[#fca5a5] font-bold bg-red-950/60 px-1 py-0.5 rounded border border-red-500/30">🔴 -{pointDiff}</span>;
+                }
               } else {
-                pickBadge = <span className="text-[9px] text-amber-300 font-bold">PICK: {(pick.predicted_winner_name || '').split(' ')[0]}</span>;
+                pickBadge = (
+                  <span className="text-[9px] text-amber-300/90 font-medium truncate max-w-[70px]">
+                    PICK: {(pick.predicted_winner_name || '').split(' ')[0]}
+                  </span>
+                );
+              }
+            }
+
+            // Period & Clock label
+            let timeStatus = statusDetail || 'Scheduled';
+            if (isLive) {
+              if (clock && period) {
+                timeStatus = `Q${period} ${clock}`;
+              } else if (period) {
+                timeStatus = `Q${period}`;
               }
             }
 
@@ -173,14 +266,18 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
               <div
                 key={details.id || idx}
                 onClick={() => onSelectGame && onSelectGame(rawGame)}
-                className="flex-shrink-0 bg-[#0e1218] hover:bg-[#151b24] border border-white/5 hover:border-white/20 rounded-xl p-2 min-w-[195px] max-w-[220px] transition cursor-pointer shadow-sm"
+                className="flex-shrink-0 bg-[#0e1218] hover:bg-[#151b24] border border-white/10 hover:border-amber-400/40 rounded-xl p-2 min-w-[200px] max-w-[230px] transition cursor-pointer shadow-sm group"
               >
                 {/* Header status */}
-                <div className="flex items-center justify-between text-[9px] text-[#9a978a] mb-1 font-mono">
-                  <span className={isLive ? 'text-red-400 font-black flex items-center' : 'text-[#9a978a]'}>
-                    {isLive ? '🔴 LIVE' : isFinal ? 'FINAL' : 'TODAY'}
+                <div className="flex items-center justify-between text-[9px] text-[#9a978a] mb-1 font-mono border-b border-white/5 pb-1">
+                  <span className={`font-bold flex items-center gap-1 truncate ${isLive ? 'text-red-400 font-black' : isFinal ? 'text-[#86efac]' : 'text-[#9a978a]'}`}>
+                    {isLive && <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />}
+                    {isLive ? timeStatus : isFinal ? 'FINAL' : (timeStatus.length > 14 ? timeStatus.slice(0, 14) + '…' : timeStatus)}
                   </span>
-                  {pickBadge || <span className="text-white/40">{broadcast || 'ESPN'}</span>}
+                  <div className="flex items-center gap-1">
+                    {pickBadge}
+                    {!pickBadge && <span className="text-white/40">{broadcast || 'ESPN'}</span>}
+                  </div>
                 </div>
 
                 {/* Away Team Row */}
@@ -192,13 +289,16 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
                       className="w-4 h-4 object-contain flex-shrink-0"
                       onError={(e) => { e.target.src = 'https://a.espncdn.com/i/teamlogos/ncaa/500/7.png'; }}
                     />
-                    <span className="font-bold text-white truncate text-[11px]">
+                    <span className="font-bold text-white truncate text-[11px] group-hover:text-amber-300 transition-colors">
                       {away.rank && <span className="text-amber-400 mr-1 font-mono text-[10px]">#{away.rank}</span>}
                       {away.name.split(' ')[0]}
                     </span>
+                    {possession && String(possession) === String(away.id) && (
+                      <span className="text-[9px] animate-bounce" title="Possession">🏈</span>
+                    )}
                   </div>
-                  <span className={`font-mono font-bold text-xs ${isLive || isFinal ? 'text-white' : 'text-[#9a978a]'}`}>
-                    {isLive || isFinal ? away.score : ''}
+                  <span className={`font-mono font-black text-xs ${isLive || isFinal ? (away.score > home.score ? 'text-amber-400' : 'text-white') : 'text-white/30'}`}>
+                    {isLive || isFinal ? away.score : '-'}
                   </span>
                 </div>
 
@@ -211,15 +311,26 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
                       className="w-4 h-4 object-contain flex-shrink-0"
                       onError={(e) => { e.target.src = 'https://a.espncdn.com/i/teamlogos/ncaa/500/7.png'; }}
                     />
-                    <span className="font-bold text-white truncate text-[11px]">
+                    <span className="font-bold text-white truncate text-[11px] group-hover:text-amber-300 transition-colors">
                       {home.rank && <span className="text-amber-400 mr-1 font-mono text-[10px]">#{home.rank}</span>}
                       {home.name.split(' ')[0]}
                     </span>
+                    {possession && String(possession) === String(home.id) && (
+                      <span className="text-[9px] animate-bounce" title="Possession">🏈</span>
+                    )}
                   </div>
-                  <span className={`font-mono font-bold text-xs ${isLive || isFinal ? 'text-white' : 'text-[#9a978a]'}`}>
-                    {isLive || isFinal ? home.score : ''}
+                  <span className={`font-mono font-black text-xs ${isLive || isFinal ? (home.score > away.score ? 'text-amber-400' : 'text-white') : 'text-white/30'}`}>
+                    {isLive || isFinal ? home.score : '-'}
                   </span>
                 </div>
+
+                {/* Down & distance footer if live */}
+                {isLive && downDistance && (
+                  <div className="mt-1 pt-1 border-t border-white/5 text-[8px] text-white/50 font-mono flex items-center justify-between">
+                    <span className="truncate">{downDistance}</span>
+                    <span className="text-red-400 font-bold">🔴 LIVE</span>
+                  </div>
+                )}
               </div>
             );
           })}

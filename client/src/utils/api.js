@@ -57,6 +57,7 @@ export const api = {
   // Games & Schedules
   getGames: ({ year = 2026, week = 1, conference = 'ALL', refresh = false } = {}) => 
     request(`/games?year=${year}&week=${week}&conference=${encodeURIComponent(conference)}&refresh=${refresh}`),
+  getLiveTracker: () => request('/games/live-tracker'),
   syncEspn: ({ year = 2026, week = 1 } = {}) =>
     request('/games/sync', {
       method: 'POST',

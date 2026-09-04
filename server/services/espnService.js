@@ -264,6 +264,123 @@ class EspnService {
     }
   }
 
+  async getLiveScoreboard() {
+    const cacheKey = 'espn_live_scoreboard_realtime';
+    const cached = this.memoryCache.get(cacheKey);
+
+    // Cache live scoreboard for 15 seconds
+    if (cached && (Date.now() - cached.timestamp < 15000)) {
+      return cached.data;
+    }
+
+    try {
+      const url = 'https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?limit=100';
+      const data = await this.fetchJson(url);
+
+      if (data && data.events && Array.isArray(data.events) && data.events.length > 0) {
+        const liveEvents = data.events.map(event => {
+          const comp = event.competitions?.[0] || {};
+          const competitors = comp.competitors || [];
+          const homeComp = competitors.find(c => c.homeAway === 'home') || competitors[0] || {};
+          const awayComp = competitors.find(c => c.homeAway === 'away') || competitors[1] || {};
+
+          const homeTeam = homeComp.team || {};
+          const awayTeam = awayComp.team || {};
+
+          const statusType = event.status?.type?.name || 'STATUS_SCHEDULED';
+          const statusState = event.status?.type?.state || 'pre';
+          const statusDetail = event.status?.type?.detail || event.status?.type?.shortDetail || 'Scheduled';
+          const isFinal = statusState === 'post' || statusType === 'STATUS_FINAL';
+          const isLive = statusState === 'in' || statusType === 'STATUS_IN_PROGRESS';
+
+          const homeRank = (homeComp.curatedRank?.current && homeComp.curatedRank.current <= 25) ? homeComp.curatedRank.current : null;
+          const awayRank = (awayComp.curatedRank?.current && awayComp.curatedRank.current <= 25) ? awayComp.curatedRank.current : null;
+
+          const broadcast = comp.broadcasts?.[0]?.names?.[0] || comp.geoBroadcasts?.[0]?.media?.shortName || 'ESPN';
+          const odds = comp.odds?.[0]?.details || null;
+
+          return {
+            id: event.id,
+            gameId: event.id,
+            name: event.name,
+            shortName: event.shortName || `${awayTeam.abbreviation || 'AWAY'} @ ${homeTeam.abbreviation || 'HOME'}`,
+            date: event.date,
+            status: statusType,
+            statusState,
+            statusDetail,
+            isLive,
+            isFinal,
+            period: event.status?.period || null,
+            clock: event.status?.displayClock || null,
+            downDistance: comp.situation?.downDistanceText || null,
+            possession: comp.situation?.possession || null,
+            broadcast,
+            odds,
+            homeTeam: {
+              id: homeTeam.id,
+              name: homeTeam.displayName || homeTeam.name,
+              nickname: homeTeam.name || homeTeam.nickname || 'Home',
+              abbreviation: homeTeam.abbreviation || 'HOME',
+              logo: homeTeam.logo || `https://a.espncdn.com/i/teamlogos/ncaa/500/${homeTeam.id}.png`,
+              score: parseInt(homeComp.score || 0, 10),
+              rank: homeRank,
+              record: homeComp.records?.[0]?.summary || '0-0',
+              color: homeTeam.color ? `#${homeTeam.color}` : '#1e3a8a'
+            },
+            awayTeam: {
+              id: awayTeam.id,
+              name: awayTeam.displayName || awayTeam.name,
+              nickname: awayTeam.name || awayTeam.nickname || 'Away',
+              abbreviation: awayTeam.abbreviation || 'AWAY',
+              logo: awayTeam.logo || `https://a.espncdn.com/i/teamlogos/ncaa/500/${awayTeam.id}.png`,
+              score: parseInt(awayComp.score || 0, 10),
+              rank: awayRank,
+              record: awayComp.records?.[0]?.summary || '0-0',
+              color: awayTeam.color ? `#${awayTeam.color}` : '#991b1b'
+            }
+          };
+        });
+
+        const result = {
+          games: liveEvents,
+          total: liveEvents.length,
+          lastUpdated: new Date().toISOString(),
+          source: 'ESPN Live CFB Scoreboard'
+        };
+
+        this.memoryCache.set(cacheKey, { timestamp: Date.now(), data: result });
+        return result;
+      }
+    } catch (err) {
+      console.warn('Live scoreboard fetch warning:', err.message);
+    }
+
+    // Fallback if network fails: load 2026 week 1 games
+    const fallbackGames = await this.get2026SeasonGames(2026, 1, 'ALL');
+    const result = {
+      games: fallbackGames.map(g => ({
+        id: g.id,
+        gameId: g.id,
+        name: g.name,
+        shortName: g.shortName,
+        date: g.date,
+        status: g.status,
+        statusState: g.isFinal ? 'post' : (g.isInProgress ? 'in' : 'pre'),
+        statusDetail: g.statusDetail || 'Upcoming 2026',
+        isLive: g.isInProgress,
+        isFinal: g.isFinal,
+        broadcast: g.broadcast || 'ESPN',
+        odds: g.odds,
+        homeTeam: g.homeTeam,
+        awayTeam: g.awayTeam
+      })),
+      total: fallbackGames.length,
+      lastUpdated: new Date().toISOString(),
+      source: '2026 Season Schedule'
+    };
+    return result;
+  }
+
   async getScoreboard({ year = 2026, week = 0, seasonType = 2, conference = 'ALL', forceRefresh = false } = {}) {
     const confKey = (conference || 'ALL').toUpperCase();
     const queryWeek = parseInt(week !== undefined ? week : 0, 10);
