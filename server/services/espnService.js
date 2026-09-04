@@ -257,7 +257,7 @@ class EspnService {
         allGames = this.filterByConference(allGames, confKey);
       }
 
-      return allGames;
+      return await this.enrichGamesWithLiveRecords(allGames, year);
     } catch (e) {
       console.error('Error in get2026SeasonGames:', e);
       return [];
@@ -341,9 +341,10 @@ class EspnService {
           };
         });
 
+        const liveEventsEnriched = await this.enrichGamesWithLiveRecords(liveEvents, 2026);
         const result = {
-          games: liveEvents,
-          total: liveEvents.length,
+          games: liveEventsEnriched,
+          total: liveEventsEnriched.length,
           lastUpdated: new Date().toISOString(),
           source: 'ESPN Live CFB Scoreboard'
         };
@@ -421,6 +422,8 @@ class EspnService {
       if (confKey !== 'ALL' && confKey !== 'TOP25' && CONFERENCE_TEAMS[confKey]) {
         normalizedGames = this.filterByConference(normalizedGames, confKey);
       }
+
+      normalizedGames = await this.enrichGamesWithLiveRecords(normalizedGames, year);
 
       const result = {
         season: data.season || { year, type: seasonType },
@@ -627,7 +630,7 @@ class EspnService {
       ORDER BY game_date ASC
     `).all(year, String(year), week);
 
-    return rows.map(r => {
+    const games = rows.map(r => {
       if (r.raw_json) {
         try {
           return JSON.parse(r.raw_json);
@@ -661,6 +664,8 @@ class EspnService {
         }
       };
     });
+
+    return await this.enrichGamesWithLiveRecords(games, year);
   }
 
   async getRankings({ forceRefresh = false } = {}) {
@@ -760,6 +765,152 @@ class EspnService {
       console.warn('Standings fetch warning:', e.message);
       return recordsMap;
     }
+  }
+
+  async calculateTeamRecords(seasonYear = 2026) {
+    const cacheKey = `team_records_${seasonYear}`;
+    const cached = this.memoryCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < 15000)) {
+      return cached.data;
+    }
+
+    const teamWins = new Map();
+    const teamLosses = new Map();
+    const processedGameIds = new Set();
+
+    const getTeamObj = (t) => {
+      if (!t) return null;
+      const str = String(t).toLowerCase().trim();
+      return TEAMS_2026.find(tm => 
+        tm.id.toLowerCase() === str || 
+        String(tm.espnId) === str || 
+        tm.name.toLowerCase() === str || 
+        (tm.nickname && tm.nickname.toLowerCase() === str) ||
+        (tm.abbreviation && tm.abbreviation.toLowerCase() === str)
+      );
+    };
+
+    const addRecord = (winnerKey, loserKey) => {
+      if (winnerKey) {
+        teamWins.set(winnerKey, (teamWins.get(winnerKey) || 0) + 1);
+      }
+      if (loserKey) {
+        teamLosses.set(loserKey, (teamLosses.get(loserKey) || 0) + 1);
+      }
+    };
+
+    try {
+      // 1. Check games_cache for all finished games in this season
+      const games = await db.prepare(`
+        SELECT * FROM games_cache 
+        WHERE status = 'STATUS_FINAL' AND (season_year = ? OR season_year = ?)
+      `).all(seasonYear, String(seasonYear));
+
+      for (const g of games) {
+        if (processedGameIds.has(g.game_id)) continue;
+        processedGameIds.add(g.game_id);
+
+        const hScore = Number(g.home_team_score || 0);
+        const aScore = Number(g.away_team_score || 0);
+        const hTeam = getTeamObj(g.home_team_id) || getTeamObj(g.home_team_name);
+        const aTeam = getTeamObj(g.away_team_id) || getTeamObj(g.away_team_name);
+
+        const hId = hTeam ? hTeam.id : (g.home_team_id || g.home_team_name);
+        const aId = aTeam ? aTeam.id : (g.away_team_id || g.away_team_name);
+
+        if (hScore > aScore) {
+          addRecord(hId, aId);
+        } else if (aScore > hScore) {
+          addRecord(aId, hId);
+        }
+      }
+
+      // 2. Check team_schedules for any additional finished games
+      const scheds = await db.prepare(`
+        SELECT * FROM team_schedules 
+        WHERE status = 'STATUS_FINAL' AND (season_year = ? OR season_year = ?)
+      `).all(seasonYear, String(seasonYear));
+
+      for (const s of scheds) {
+        if (processedGameIds.has(s.game_id)) continue;
+        processedGameIds.add(s.game_id);
+
+        const tScore = Number(s.team_score || 0);
+        const oScore = Number(s.opponent_score || 0);
+        const tTeam = getTeamObj(s.team_id);
+        const oTeam = getTeamObj(s.opponent_name);
+
+        const tId = tTeam ? tTeam.id : s.team_id;
+        const oId = oTeam ? oTeam.id : s.opponent_name;
+
+        if (tScore > oScore) {
+          addRecord(tId, oId);
+        } else if (oScore > tScore) {
+          addRecord(oId, tId);
+        }
+      }
+
+      // 3. Standings map from ESPN
+      const standingsMap = await this.getStandingsMap().catch(() => new Map());
+
+      const recordGetter = (team) => {
+        if (!team) return '0-0';
+        const teamObj = getTeamObj(team.id || team.espnId || team.name || team);
+        const canonicalId = teamObj ? teamObj.id : (team.id || team.name);
+
+        const dbWins = teamWins.get(canonicalId) || (teamObj ? teamWins.get(teamObj.name) : 0) || 0;
+        const dbLosses = teamLosses.get(canonicalId) || (teamObj ? teamLosses.get(teamObj.name) : 0) || 0;
+
+        if (dbWins > 0 || dbLosses > 0) {
+          return `${dbWins}-${dbLosses}`;
+        }
+
+        const espnInfo = standingsMap.get(String(team.espnId || (teamObj && teamObj.espnId) || '')) ||
+                         standingsMap.get((team.name || '').toLowerCase()) ||
+                         standingsMap.get((team.id || '').toLowerCase());
+        if (espnInfo && espnInfo.overall && espnInfo.overall !== '0-0') {
+          return espnInfo.overall;
+        }
+
+        return team.record && team.record !== '0-0' ? team.record : '0-0';
+      };
+
+      const result = {
+        teamWins,
+        teamLosses,
+        getRecordForTeam: recordGetter
+      };
+
+      this.memoryCache.set(cacheKey, { timestamp: Date.now(), data: result });
+      return result;
+    } catch (e) {
+      console.warn('Error calculating team records:', e);
+      return {
+        getRecordForTeam: (team) => team?.record || '0-0'
+      };
+    }
+  }
+
+  async enrichGamesWithLiveRecords(games, seasonYear = 2026) {
+    if (!games || !Array.isArray(games) || games.length === 0) return games;
+    const recordsHelper = await this.calculateTeamRecords(seasonYear);
+
+    return games.map(g => {
+      const homeRecord = recordsHelper.getRecordForTeam(g.homeTeam);
+      const awayRecord = recordsHelper.getRecordForTeam(g.awayTeam);
+
+      return {
+        ...g,
+        homeTeam: {
+          ...g.homeTeam,
+          record: homeRecord
+        },
+        awayTeam: {
+          ...g.awayTeam,
+          record: awayRecord
+        }
+      };
+    });
   }
 
   normalizeRankings(data) {

@@ -17,7 +17,8 @@ router.get('/', optionalAuth, async (req, res) => {
       teams = teams.filter(t => t.conference.toLowerCase().includes(confLower) || (confLower === 'ind' && t.conference.toLowerCase().includes('ind')));
     }
 
-    // Fetch live ESPN real-world standings/records map
+    // Fetch calculated live team records (from database completed games & ESPN standings)
+    const recordsHelper = await espnService.calculateTeamRecords(2026).catch(() => ({ getRecordForTeam: () => '0-0' }));
     const standingsMap = await espnService.getStandingsMap().catch(() => new Map());
 
     // Calculate user's projected record for each team if logged in
@@ -77,9 +78,9 @@ router.get('/', optionalAuth, async (req, res) => {
 
       const totalScheduled = teamSchedules.length || 12;
 
-      // Real-world record from ESPN
+      // Real-world record dynamically calculated from final games & ESPN standings
+      const currentRecord = recordsHelper.getRecordForTeam(team) || '0-0';
       const espnInfo = standingsMap.get(String(team.espnId)) || standingsMap.get(tName) || standingsMap.get(tId);
-      const currentRecord = espnInfo?.overall || '0-0';
       const conferenceRecord = espnInfo?.conference || '0-0';
 
       return {
@@ -113,9 +114,10 @@ router.get('/:id/schedule', optionalAuth, async (req, res) => {
     }
 
     // Pull real-world standings/record for this team
+    const recordsHelper = await espnService.calculateTeamRecords(2026).catch(() => ({ getRecordForTeam: () => '0-0' }));
     const standingsMap = await espnService.getStandingsMap().catch(() => new Map());
+    const currentRecord = recordsHelper.getRecordForTeam(team) || '0-0';
     const espnInfo = standingsMap.get(String(team.espnId)) || standingsMap.get(team.name.toLowerCase()) || standingsMap.get(team.id.toLowerCase());
-    const currentRecord = espnInfo?.overall || '0-0';
     const conferenceRecord = espnInfo?.conference || '0-0';
 
     // Pull from team_schedules table
