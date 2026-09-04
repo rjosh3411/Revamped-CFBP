@@ -158,7 +158,7 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
           winnerId: null,
           broadcast: s.broadcast || 'ESPN',
           venue: s.venue_name || 'College Stadium',
-          odds,
+          odds: odds?.fullLine || odds?.spreadText || null,
           homeTeam,
           awayTeam
         });

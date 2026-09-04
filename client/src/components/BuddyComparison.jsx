@@ -156,6 +156,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
   const [selectedBuddyId, setSelectedBuddyId] = useState('');
   const [comparisonData, setComparisonData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [filterMode, setFilterMode] = useState('ALL'); // 'ALL', 'DISAGREED', 'AGREED', 'LOCKS'
   const [copiedCode, setCopiedCode] = useState(false);
 
@@ -171,6 +172,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
     let isMounted = true;
     if (selectedPartyId) {
       setLoading(true);
+      setError(null);
       api.getBuddyComparison(selectedPartyId, {
         year: currentYear || 2026,
         week: currentWeek || 1,
@@ -181,6 +183,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
         }
       }).catch(err => {
         console.warn('Buddy comparison load warning:', err);
+        if (isMounted) setError(err?.message || 'Failed to load comparisons');
       }).finally(() => {
         if (isMounted) setLoading(false);
       });
@@ -496,6 +499,44 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
           <div className="animate-spin w-10 h-10 border-3 border-amber-400 border-t-transparent rounded-full mx-auto mb-4"></div>
           <p className="text-sm font-bold uppercase tracking-wider text-amber-400">Loading Head-to-Head Clash Matrix...</p>
         </div>
+      ) : error && !comparisonData ? (
+        <div className="bg-[#0e1218] border border-red-500/20 rounded-3xl p-8 text-center max-w-lg mx-auto space-y-4">
+          <div className="text-3xl">⚠️</div>
+          <h3 className="text-lg font-bold text-white">Unable to Load Rivalry Matrix</h3>
+          <p className="text-xs text-white/60">{error}</p>
+          <button
+            onClick={() => {
+              if (selectedPartyId) {
+                setLoading(true);
+                setError(null);
+                api.getBuddyComparison(selectedPartyId, {
+                  year: currentYear || 2026,
+                  week: currentWeek || 1,
+                  buddyId: selectedBuddyId || undefined
+                }).then(data => {
+                  if (data) setComparisonData(data);
+                }).catch(err => {
+                  setError(err?.message || 'Failed to load comparisons');
+                }).finally(() => {
+                  setLoading(false);
+                });
+              }
+            }}
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs uppercase rounded-xl transition cursor-pointer"
+          >
+            Retry Loading
+          </button>
+        </div>
+      ) : !loading && (!parties || parties.length === 0) ? (
+        <div className="bg-[#0e1218] border border-white/10 rounded-3xl p-8 sm:p-12 text-center shadow-2xl max-w-xl mx-auto space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-2xl mx-auto">
+            🏈
+          </div>
+          <h2 className="text-xl font-black text-white uppercase tracking-wide">No Prediction Parties Yet</h2>
+          <p className="text-xs sm:text-sm text-white/60 max-w-md mx-auto">
+            Create or join a Prediction Party to challenge friends head-to-head and track your rivalry points!
+          </p>
+        </div>
       ) : !loading && comparisonData && buddies.length === 0 ? (
         /* EMPTY STATE: When alone in party */
         <div className="bg-[#0e1218] border border-white/10 rounded-3xl p-8 sm:p-12 text-center shadow-2xl max-w-xl mx-auto space-y-6 animate-in fade-in duration-200">
@@ -619,16 +660,20 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-white/5">
                       <div className="flex items-center space-x-3">
                         <div className="flex items-center space-x-2">
-                          <img src={g.awayTeam.logo} alt={g.awayTeam.name} className="w-6 h-6 object-contain" />
+                          {g.awayTeam?.logo && (
+                            <img src={g.awayTeam.logo} alt={g.awayTeam.name || 'Away Team'} className="w-6 h-6 object-contain" />
+                          )}
                           <span className="font-bold text-white text-xs sm:text-sm">
-                            {g.awayTeam.rank ? `#${g.awayTeam.rank} ` : ''}{g.awayTeam.name}
+                            {g.awayTeam?.rank ? `#${g.awayTeam.rank} ` : ''}{g.awayTeam?.name || 'Away Team'}
                           </span>
                         </div>
                         <span className="text-white/40 font-black text-xs">@</span>
                         <div className="flex items-center space-x-2">
-                          <img src={g.homeTeam.logo} alt={g.homeTeam.name} className="w-6 h-6 object-contain" />
+                          {g.homeTeam?.logo && (
+                            <img src={g.homeTeam.logo} alt={g.homeTeam.name || 'Home Team'} className="w-6 h-6 object-contain" />
+                          )}
                           <span className="font-bold text-white text-xs sm:text-sm">
-                            {g.homeTeam.rank ? `#${g.homeTeam.rank} ` : ''}{g.homeTeam.name}
+                            {g.homeTeam?.rank ? `#${g.homeTeam.rank} ` : ''}{g.homeTeam?.name || 'Home Team'}
                           </span>
                         </div>
                       </div>
@@ -647,7 +692,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
                           </span>
                         )}
                         <span className="text-[10px] text-white/40 font-medium">
-                          {g.odds || g.broadcast || '2026 Matchup'}
+                          {typeof g.odds === 'object' ? (g.odds?.fullLine || g.odds?.spreadText || g.broadcast || '2026 Matchup') : (g.odds || g.broadcast || '2026 Matchup')}
                         </span>
                       </div>
                     </div>

@@ -291,7 +291,7 @@ export function GameCard({ game, onPick, isSaving }) {
           <div className="mt-2.5 flex flex-wrap items-center justify-between text-[11px] text-slate-400 px-1">
             {game.odds && (
               <span className="text-amber-400/90 font-medium">
-                Line: {game.odds}
+                Line: {typeof game.odds === 'object' ? (game.odds.fullLine || game.odds.spreadText || '') : game.odds}
               </span>
             )}
             {game.venue && (
