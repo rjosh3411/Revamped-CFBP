@@ -27,6 +27,9 @@ router.get('/', optionalAuth, async (req, res) => {
     // Automatically grade any finished games and award/deduct points in real time
     gradingService.gradeFinishedGames(games).catch(e => console.warn('Auto-grading warning:', e));
 
+    // Ensure all team records reflect real-time wins and losses from finished games
+    games = await espnService.enrichGamesWithLiveRecords(games, year);
+
     if (conference && conference !== 'ALL') {
       games = espnService.filterByConference(games, conference);
     }
@@ -77,10 +80,13 @@ router.get('/', optionalAuth, async (req, res) => {
 router.get('/live-tracker', optionalAuth, async (req, res) => {
   try {
     const liveScoreboard = await espnService.getLiveScoreboard();
-    const games = liveScoreboard.games || [];
+    let games = liveScoreboard.games || [];
 
     // Automatically grade any finished games and award/deduct points in real time
     gradingService.gradeFinishedGames(games).catch(e => console.warn('Auto-grading live warning:', e));
+
+    // Ensure all team records reflect real-time wins and losses from finished games
+    games = await espnService.enrichGamesWithLiveRecords(games, 2026);
 
     let userPicksMap = {};
     if (req.user) {
