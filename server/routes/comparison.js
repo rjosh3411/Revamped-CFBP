@@ -365,6 +365,12 @@ function arePicksAgreed(pickA, pickB, homeTeam, awayTeam) {
   return false;
 }
 
+    let myContestedPoints = 0;
+    let buddyContestedPoints = 0;
+    let myContestedWins = 0;
+    let buddyContestedWins = 0;
+    let totalContestedGames = 0;
+
     const gameComparisons = targetGames.map(g => {
       const myPick = myPicksMap.get(g.id) || null;
       const buddyPick = selectedBuddy ? (buddyPicksMap.get(g.id) || null) : null;
@@ -383,16 +389,30 @@ function arePicksAgreed(pickA, pickB, homeTeam, awayTeam) {
         } else {
           comparisonStatus = 'DISAGREED';
           disagreedCount++;
+          totalContestedGames++;
         }
 
         if (g.isFinal && g.winnerId) {
           const myCorrect = myPick.predicted_winner_id === g.winnerId || myPick.is_correct === 1;
           const buddyCorrect = buddyPick.predicted_winner_id === g.winnerId || buddyPick.is_correct === 1;
 
-          if (myCorrect && buddyCorrect) headToHeadResult = 'BOTH_CORRECT';
-          else if (!myCorrect && !buddyCorrect) headToHeadResult = 'BOTH_INCORRECT';
-          else if (myCorrect && !buddyCorrect) headToHeadResult = 'YOU_WON';
-          else if (!myCorrect && buddyCorrect) headToHeadResult = 'BUDDY_WON';
+          if (myCorrect && buddyCorrect) {
+            headToHeadResult = 'BOTH_CORRECT';
+          } else if (!myCorrect && !buddyCorrect) {
+            headToHeadResult = 'BOTH_INCORRECT';
+          } else if (myCorrect && !buddyCorrect) {
+            headToHeadResult = 'YOU_WON';
+            if (!isAgreed) {
+              myContestedWins++;
+              myContestedPoints += (myPick.points_awarded || (myPick.confidence_points || 1) * 10);
+            }
+          } else if (!myCorrect && buddyCorrect) {
+            headToHeadResult = 'BUDDY_WON';
+            if (!isAgreed) {
+              buddyContestedWins++;
+              buddyContestedPoints += (buddyPick.points_awarded || (buddyPick.confidence_points || 1) * 10);
+            }
+          }
         }
       } else if (myPick) {
         comparisonStatus = 'MY_ONLY';
@@ -444,6 +464,125 @@ function arePicksAgreed(pickA, pickB, homeTeam, awayTeam) {
 
     const agreementRate = totalCompared > 0 ? Math.round((agreedCount / totalCompared) * 100) : 0;
 
+    // Fetch full season record for current user and selected buddy
+    const getSeasonUserStats = async (userId) => {
+      const userRec = await db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+      const userPicks = await db.prepare(`
+        SELECT * FROM picks WHERE user_id = ? AND (season_year = ? OR season_year = ?)
+      `).all(userId, year, String(year));
+
+      const graded = userPicks.filter(p => p.is_correct !== null);
+      const wins = graded.filter(p => p.is_correct === 1).length;
+      const losses = graded.filter(p => p.is_correct === 0).length;
+      const pts = userPicks.reduce((sum, p) => sum + (p.points_awarded || 0), 0);
+      const winRate = graded.length > 0 ? ((wins / graded.length) * 100).toFixed(1) : '0.0';
+
+      const lockPicks = graded.filter(p => p.confidence_level === 3 || p.confidence_points === 3);
+      const lockWins = lockPicks.filter(p => p.is_correct === 1).length;
+      const lockAcc = lockPicks.length > 0 ? ((lockWins / lockPicks.length) * 100).toFixed(0) : null;
+
+      return {
+        id: userId,
+        displayName: userRec?.display_name || userRec?.username,
+        favoriteTeam: userRec?.favorite_team,
+        jerseyNumber: userRec?.jersey_number,
+        avatarUrl: userRec?.avatar_url,
+        totalPicks: userPicks.length,
+        gradedPicks: graded.length,
+        wins,
+        losses,
+        winRate: parseFloat(winRate),
+        totalPoints: pts,
+        currentStreak: userRec?.current_streak || 0,
+        bestStreak: userRec?.best_streak || 0,
+        lockAccuracy: lockAcc ? parseInt(lockAcc, 10) : null
+      };
+    };
+
+    const mySeasonRecord = await getSeasonUserStats(req.user.id);
+    const buddySeasonRecord = selectedBuddy ? await getSeasonUserStats(selectedBuddy.id) : null;
+
+    // Calculate Head-to-Head series status
+    let seriesLeader = 'TIED';
+    if (myContestedPoints > buddyContestedPoints) seriesLeader = 'YOU_LEADING';
+    else if (buddyContestedPoints > myContestedPoints) seriesLeader = 'BUDDY_LEADING';
+    else if (myContestedWins > buddyContestedWins) seriesLeader = 'YOU_LEADING';
+    else if (buddyContestedWins > myContestedWins) seriesLeader = 'BUDDY_LEADING';
+
+    const headToHeadClash = {
+      myContestedPoints,
+      buddyContestedPoints,
+      pointDifferential: myContestedPoints - buddyContestedPoints,
+      myContestedWins,
+      buddyContestedWins,
+      totalContestedGames,
+      seriesLeader
+    };
+
+    // Build Party Rivalry Roster for quick switcher
+    const seasonPartyPicks = await db.prepare(`
+      SELECT p.*, u.display_name, u.username, u.favorite_team, u.avatar_url, u.jersey_number
+      FROM picks p
+      JOIN party_members pm ON p.user_id = pm.user_id
+      JOIN users u ON p.user_id = u.id
+      WHERE pm.party_id = ? AND (p.season_year = ? OR p.season_year = ?)
+    `).all(partyId, year, String(year));
+
+    const allPicksByUser = new Map();
+    seasonPartyPicks.forEach(p => {
+      if (!allPicksByUser.has(p.user_id)) allPicksByUser.set(p.user_id, new Map());
+      allPicksByUser.get(p.user_id).set(p.game_id, p);
+    });
+
+    const myAllPicksMap = allPicksByUser.get(req.user.id) || new Map();
+
+    const rivalryRoster = buddies.map(b => {
+      const bPicks = allPicksByUser.get(b.id) || new Map();
+      let h2hMyPts = 0;
+      let h2hBuddyPts = 0;
+      let h2hMyWins = 0;
+      let h2hBuddyWins = 0;
+      let h2hContested = 0;
+
+      for (const [gId, myP] of myAllPicksMap.entries()) {
+        const budP = bPicks.get(gId);
+        if (!budP) continue;
+
+        const isAgreed = (myP.predicted_winner_id && budP.predicted_winner_id && myP.predicted_winner_id === budP.predicted_winner_id)
+          || (myP.predicted_winner_name && budP.predicted_winner_name && myP.predicted_winner_name.toLowerCase() === budP.predicted_winner_name.toLowerCase());
+
+        if (!isAgreed) {
+          h2hContested++;
+          if (myP.is_correct === 1 && budP.is_correct === 0) {
+            h2hMyWins++;
+            h2hMyPts += (myP.points_awarded || (myP.confidence_points || 1) * 10);
+          } else if (budP.is_correct === 1 && myP.is_correct === 0) {
+            h2hBuddyWins++;
+            h2hBuddyPts += (budP.points_awarded || (budP.confidence_points || 1) * 10);
+          }
+        }
+      }
+
+      let status = 'TIED';
+      if (h2hMyPts > h2hBuddyPts || (h2hMyPts === h2hBuddyPts && h2hMyWins > h2hBuddyWins)) status = 'WINNING';
+      else if (h2hBuddyPts > h2hMyPts || (h2hMyPts === h2hBuddyPts && h2hBuddyWins > h2hMyWins)) status = 'LOSING';
+
+      return {
+        id: b.id,
+        displayName: b.display_name || b.username,
+        favoriteTeam: b.favorite_team,
+        avatarUrl: b.avatar_url,
+        jerseyNumber: b.jersey_number,
+        totalPoints: b.total_points || 0,
+        myContestedPoints: h2hMyPts,
+        buddyContestedPoints: h2hBuddyPts,
+        myContestedWins: h2hMyWins,
+        buddyContestedWins: h2hBuddyWins,
+        contestedCount: h2hContested,
+        rivalryStatus: status
+      };
+    });
+
     return res.json({
       partyId,
       party,
@@ -454,7 +593,8 @@ function arePicksAgreed(pickA, pickB, homeTeam, awayTeam) {
         displayName: req.user.display_name,
         avatarUrl: req.user.avatar_url,
         favoriteTeam: req.user.favorite_team,
-        weeklyPoints: myWeeklyPoints
+        weeklyPoints: myWeeklyPoints,
+        seasonRecord: mySeasonRecord
       },
       buddies,
       selectedBuddy: selectedBuddy ? {
@@ -462,7 +602,8 @@ function arePicksAgreed(pickA, pickB, homeTeam, awayTeam) {
         displayName: selectedBuddy.display_name,
         avatarUrl: selectedBuddy.avatar_url,
         favoriteTeam: selectedBuddy.favorite_team,
-        weeklyPoints: buddyWeeklyPoints
+        weeklyPoints: buddyWeeklyPoints,
+        seasonRecord: buddySeasonRecord
       } : null,
       summary: {
         totalGames: targetGames.length,
@@ -474,6 +615,8 @@ function arePicksAgreed(pickA, pickB, homeTeam, awayTeam) {
         buddyWeeklyPoints,
         pointDifferential: myWeeklyPoints - buddyWeeklyPoints
       },
+      headToHeadClash,
+      rivalryRoster,
       comparisons: gameComparisons
     });
   } catch (err) {

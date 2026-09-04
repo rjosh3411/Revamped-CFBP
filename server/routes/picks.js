@@ -24,6 +24,112 @@ router.get('/my-picks', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/picks/my-stats
+router.get('/my-stats', authenticateToken, async (req, res) => {
+  try {
+    const year = parseInt(req.query.year || 2026, 10);
+    const userId = req.user.id;
+
+    const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+
+    const picks = await db.prepare(`
+      SELECT p.*, g.status as game_status, g.home_team_name, g.away_team_name, g.winner_team_id, g.game_date
+      FROM picks p
+      LEFT JOIN games_cache g ON p.game_id = g.game_id
+      WHERE p.user_id = ? AND (p.season_year = ? OR p.season_year = ?)
+      ORDER BY p.week_number ASC, g.game_date ASC, p.created_at ASC
+    `).all(userId, year, String(year));
+
+    const gradedPicks = picks.filter(p => p.is_correct !== null);
+    const correctCount = gradedPicks.filter(p => p.is_correct === 1).length;
+    const lossCount = gradedPicks.filter(p => p.is_correct === 0).length;
+    const pendingCount = picks.filter(p => p.is_correct === null).length;
+    const totalGraded = gradedPicks.length;
+    const winPercentage = totalGraded > 0 ? ((correctCount / totalGraded) * 100).toFixed(1) : '0.0';
+    const totalPoints = picks.reduce((sum, p) => sum + (p.points_awarded || 0), 0);
+
+    // Calculate streaks
+    let currentStreak = 0;
+    let bestStreak = 0;
+    let tempStreak = 0;
+    for (const p of gradedPicks) {
+      if (p.is_correct === 1) {
+        tempStreak++;
+        if (tempStreak > bestStreak) bestStreak = tempStreak;
+      } else {
+        tempStreak = 0;
+      }
+    }
+    currentStreak = tempStreak;
+
+    // Confidence / Star accuracy breakdown
+    const getStarStats = (starLevel) => {
+      const starGraded = gradedPicks.filter(p => p.confidence_level === starLevel || p.confidence_points === starLevel);
+      const starCorrect = starGraded.filter(p => p.is_correct === 1).length;
+      const starTotal = starGraded.length;
+      const acc = starTotal > 0 ? ((starCorrect / starTotal) * 100).toFixed(0) : null;
+      return { total: starTotal, correct: starCorrect, losses: starTotal - starCorrect, accuracy: acc };
+    };
+
+    const lockStats = getStarStats(3); // 3-Star Locks
+    const mediumStats = getStarStats(2); // 2-Star
+    const regularStats = getStarStats(1); // 1-Star
+
+    // Week by week summary
+    const weekMap = {};
+    for (const p of picks) {
+      const w = p.week_number || 1;
+      if (!weekMap[w]) {
+        weekMap[w] = { week: w, totalPicks: 0, graded: 0, correct: 0, losses: 0, pending: 0, points: 0 };
+      }
+      weekMap[w].totalPicks++;
+      if (p.is_correct === 1) {
+        weekMap[w].graded++;
+        weekMap[w].correct++;
+        weekMap[w].points += (p.points_awarded || 0);
+      } else if (p.is_correct === 0) {
+        weekMap[w].graded++;
+        weekMap[w].losses++;
+      } else {
+        weekMap[w].pending++;
+      }
+    }
+
+    const weeks = Object.values(weekMap).map(w => ({
+      ...w,
+      winPercentage: w.graded > 0 ? ((w.correct / w.graded) * 100).toFixed(1) : '0.0'
+    }));
+
+    return res.json({
+      user: {
+        id: user?.id,
+        displayName: user?.display_name || user?.username,
+        favoriteTeam: user?.favorite_team,
+        jerseyNumber: user?.jersey_number
+      },
+      stats: {
+        totalPicks: picks.length,
+        totalGraded,
+        wins: correctCount,
+        losses: lossCount,
+        pending: pendingCount,
+        winPercentage: parseFloat(winPercentage),
+        totalPoints,
+        currentStreak: user?.current_streak !== undefined ? user.current_streak : currentStreak,
+        bestStreak: user?.best_streak !== undefined ? user.best_streak : bestStreak,
+        lockStats,
+        mediumStats,
+        regularStats,
+        weeks
+      }
+    });
+  } catch (err) {
+    console.error('Fetch stats error:', err);
+    return res.status(500).json({ error: 'Failed to fetch user stats' });
+  }
+});
+
+
 // POST /api/picks
 router.post('/', authenticateToken, async (req, res) => {
   try {

@@ -79,6 +79,8 @@ export const api = {
   }),
   getMyPicks: ({ year = 2026, week = 1 } = {}) =>
     request(`/picks/my-picks?year=${year}&week=${week}`),
+  getMyStats: ({ year = 2026 } = {}) =>
+    request(`/picks/my-stats?year=${year}`),
 
   // Prediction Parties
   getMyParties: () => request('/parties/my-parties'),

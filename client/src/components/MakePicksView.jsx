@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { TeamScheduleView } from './TeamScheduleView';
 import { CoverflowWeekSelector } from './CoverflowWeekSelector';
 import { GameCard } from './GameCard';
+import { UserRecordBanner } from './UserRecordBanner';
 import { 
   Shield, Calendar, Sparkles, ChevronRight, 
   Award, Flame, CheckCircle2, Layers, Filter 
@@ -283,6 +284,9 @@ export function MakePicksView() {
 
   return (
     <div className="space-y-6">
+      {/* Overall Season Pick Record Banner */}
+      <UserRecordBanner activeWeek={selectedWeek} refreshTrigger={savingPickId} />
+
       {/* Top Dual Mode Switcher Bar */}
       <div className="bg-[#0e1218] border border-white/10 rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
         <div>

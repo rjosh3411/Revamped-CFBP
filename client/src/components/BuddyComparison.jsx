@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
+import { UserRecordBanner } from './UserRecordBanner';
 import { 
-  Users, Shield, CheckCircle2, XCircle, Clock, 
-  Flame, Sparkles, Award, ArrowRightLeft, Filter, AlertCircle, ChevronDown, Check, Swords, Copy
+  Swords, Shield, CheckCircle2, ChevronDown, Copy, Check, 
+  Flame, Award, Trophy, Users, Star, ArrowRight, Zap, Target
 } from 'lucide-react';
 
 function cleanStr(s) {
@@ -22,7 +23,7 @@ const CANONICAL_MAP = {
   'tenn': 'tennessee', 'tennessee': 'tennessee', 'tennesseevolunteers': 'tennessee', 'vols': 'tennessee', 'volunteers': 'tennessee', '2633': 'tennessee',
   'fla': 'florida', 'florida': 'florida', 'floridagators': 'florida', 'gators': 'florida', '57': 'florida',
   'ou': 'oklahoma', 'oklahoma': 'oklahoma', 'oklahomasooners': 'oklahoma', 'sooners': 'oklahoma', '201': 'oklahoma',
-  'miz': 'missouri', 'mizzou': 'missouri', 'missouri': 'missouri', 'missouritigers': 'missouri', '142': 'missouri',
+  'miz': 'missouri', 'mizzou': 'missouri', 'missouritigers': 'missouri', '142': 'missouri',
   'aub': 'auburn', 'auburn': 'auburn', 'auburntigers': 'auburn', '2': 'auburn',
   'sc': 'south-carolina', 'southcarolina': 'south-carolina', 'southcarolinagamecocks': 'south-carolina', 'gamecocks': 'south-carolina', '2579': 'south-carolina',
   'ark': 'arkansas', 'arkansas': 'arkansas', 'arkansasrazorbacks': 'arkansas', 'razorbacks': 'arkansas', '8': 'arkansas',
@@ -105,18 +106,13 @@ function resolvePickToTeam(pick, homeTeam, awayTeam) {
   const aClean = cleanStr(aName);
   const aCanonical = normalizeTeamKey(aName || aId);
 
-  // Canonical match against home or away
   if (pCanonical && hCanonical && pCanonical === hCanonical) return 'HOME';
   if (pCanonical && aCanonical && pCanonical === aCanonical) return 'AWAY';
 
-  // Exact ID match
   if (pId && (pId === hId || (homeTeam?.espnId && pId === String(homeTeam.espnId)))) return 'HOME';
   if (pId && (pId === aId || (awayTeam?.espnId && pId === String(awayTeam.espnId)))) return 'AWAY';
 
-  // Name or abbreviation matching on home
   if (pClean && hClean && (pClean === hClean || pClean.includes(hClean) || hClean.includes(pClean) || pClean === cleanStr(hAbbr) || pClean === cleanStr(hId))) return 'HOME';
-  
-  // Name or abbreviation matching on away
   if (pClean && aClean && (pClean === aClean || pClean.includes(aClean) || aClean.includes(pClean) || pClean === cleanStr(aAbbr) || pClean === cleanStr(aId))) return 'AWAY';
 
   return pClean;
@@ -160,7 +156,7 @@ export function BuddyComparison({ parties, currentWeek, currentYear }) {
   const [selectedBuddyId, setSelectedBuddyId] = useState('');
   const [comparisonData, setComparisonData] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [filterMode, setFilterMode] = useState('ALL'); // 'ALL', 'AGREED', 'DISAGREED'
+  const [filterMode, setFilterMode] = useState('ALL'); // 'ALL', 'DISAGREED', 'AGREED', 'LOCKS'
   const [copiedCode, setCopiedCode] = useState(false);
 
   useEffect(() => {
@@ -180,12 +176,12 @@ export function BuddyComparison({ parties, currentWeek, currentYear }) {
     setLoading(true);
     try {
       const data = await api.getBuddyComparison(selectedPartyId, {
-        year: currentYear,
-        week: currentWeek,
+        year: currentYear || 2026,
+        week: currentWeek || 1,
         buddyId: selectedBuddyId || undefined
       });
       setComparisonData(data);
-      if (data?.selectedBuddy && !selectedBuddyId) {
+      if (data.selectedBuddy && !selectedBuddyId) {
         setSelectedBuddyId(data.selectedBuddy.id);
       }
     } catch (err) {
@@ -195,9 +191,14 @@ export function BuddyComparison({ parties, currentWeek, currentYear }) {
     }
   }
 
-  const selectedParty = (parties || []).find(p => p.id === selectedPartyId) || comparisonData?.party;
+  const selectedParty = parties.find(p => p.id === selectedPartyId) || parties[0];
   const buddies = comparisonData?.buddies || [];
   const selectedBuddy = comparisonData?.selectedBuddy;
+  const rivalryRoster = comparisonData?.rivalryRoster || [];
+  const headToHeadClash = comparisonData?.headToHeadClash;
+  const mySeasonRecord = comparisonData?.currentUser?.seasonRecord;
+  const buddySeasonRecord = comparisonData?.selectedBuddy?.seasonRecord;
+
   const comparisons = (comparisonData?.comparisons || []).map(c => {
     if (c.myPick && c.buddyPick) {
       const isAgreed = arePicksAgreed(c.myPick, c.buddyPick, c.game?.homeTeam, c.game?.awayTeam);
@@ -213,6 +214,12 @@ export function BuddyComparison({ parties, currentWeek, currentYear }) {
   const disagreedCount = comparisons.filter(c => c.comparisonStatus === 'DISAGREED').length;
   const totalCompared = agreedCount + disagreedCount;
   const agreementRate = totalCompared > 0 ? Math.round((agreedCount / totalCompared) * 100) : 0;
+
+  const lockClashes = comparisons.filter(c => {
+    const isLock = (c.myPick?.confidence_level === 3 || c.myPick?.confidence_points === 3) ||
+                   (c.buddyPick?.confidence_level === 3 || c.buddyPick?.confidence_points === 3);
+    return isLock && c.comparisonStatus === 'DISAGREED';
+  });
 
   const summary = {
     ...comparisonData?.summary,
@@ -234,32 +241,39 @@ export function BuddyComparison({ parties, currentWeek, currentYear }) {
   const filteredComparisons = comparisons.filter(c => {
     if (filterMode === 'AGREED') return c.comparisonStatus === 'AGREED';
     if (filterMode === 'DISAGREED') return c.comparisonStatus === 'DISAGREED';
+    if (filterMode === 'LOCKS') {
+      const isLock = (c.myPick?.confidence_level === 3 || c.myPick?.confidence_points === 3) ||
+                     (c.buddyPick?.confidence_level === 3 || c.buddyPick?.confidence_points === 3);
+      return isLock && c.comparisonStatus === 'DISAGREED';
+    }
     return true;
   });
 
   return (
     <div className="space-y-6">
-      {/* Top Banner & Selectors */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pb-6 border-b border-slate-800">
+      {/* Overall Season Performance Banner */}
+      <UserRecordBanner activeWeek={currentWeek} />
+
+      {/* Top Header & Party Controls */}
+      <div className="bg-gradient-to-r from-slate-950 via-[#0d121c] to-slate-950 border border-white/10 rounded-3xl p-5 sm:p-6 shadow-2xl">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pb-5 border-b border-white/10">
           <div>
             <div className="flex items-center space-x-2 text-amber-400 text-xs font-bold uppercase tracking-wider mb-1">
               <Swords className="w-4 h-4" />
-              <span>Head-to-Head Buddy Comparison Matrix</span>
+              <span>Head-to-Head Party Rivalry Matrix</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white font-display uppercase tracking-wide">
-              Peer Agreement & Rivalry Picks
+            <h1 className="text-xl sm:text-2xl font-black text-white uppercase tracking-wide">
+              Split Decisions & Head-to-Head Clash
             </h1>
-            <p className="text-sm text-slate-400 max-w-xl">
-              Compare your 2026 predictions against fellow party members. Discover where you agree, where you clash, and who has bragging rights!
+            <p className="text-xs sm:text-sm text-white/60 max-w-xl mt-0.5">
+              Confidence-weighted head-to-head competition. Challenge your party friends on contested matchups and claim ultimate bragging rights!
             </p>
           </div>
 
-          {/* Party and Buddy Selectors */}
-          <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-            {/* Party Selector */}
+          {/* Party Selector */}
+          <div className="flex items-center gap-3 w-full lg:w-auto">
             <div className="relative flex-1 sm:flex-none">
-              <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1.5 tracking-wider">Prediction Party</label>
+              <label className="block text-[10px] uppercase font-bold text-white/50 mb-1 tracking-wider">Active Party</label>
               <div className="relative group">
                 <select
                   value={selectedPartyId}
@@ -276,107 +290,189 @@ export function BuddyComparison({ parties, currentWeek, currentYear }) {
                 <ChevronDown className="w-4 h-4 text-amber-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 group-hover:opacity-100 transition" />
               </div>
             </div>
-
-            {/* Buddy Selector */}
-            {buddies.length > 0 && (
-              <div className="relative flex-1 sm:flex-none">
-                <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1.5 tracking-wider">Compare Against Buddy</label>
-                <div className="relative group">
-                  <select
-                    value={selectedBuddyId}
-                    onChange={(e) => setSelectedBuddyId(e.target.value)}
-                    className="w-full sm:w-64 appearance-none bg-[#090d14]/90 hover:bg-[#121824] text-white text-xs font-bold pl-3.5 pr-10 py-2.5 rounded-2xl border border-white/10 hover:border-indigo-400/50 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 shadow-xl transition backdrop-blur-md cursor-pointer"
-                  >
-                    {buddies.map(b => (
-                      <option key={b.id} value={b.id} className="bg-[#0e1218] text-white py-1.5">
-                        👤 {b.display_name} ({b.favorite_team})
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="w-4 h-4 text-indigo-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 group-hover:opacity-100 transition" />
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
-        {/* Head-to-Head Comparison Card Summary (when buddy exists) */}
+        {/* Party Rivalry Quick-Switcher Roster */}
+        {buddies.length > 0 && (
+          <div className="pt-4">
+            <div className="flex items-center justify-between text-xs font-bold text-white/60 uppercase tracking-wider mb-2.5">
+              <span className="flex items-center space-x-1.5">
+                <Users className="w-3.5 h-3.5 text-amber-400" />
+                <span>Select Rival to Challenge ({buddies.length} Members)</span>
+              </span>
+              <span className="text-[10px] text-amber-400/80">Click a friend to compare head-to-head</span>
+            </div>
+
+            <div className="flex items-center space-x-2.5 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-white/10">
+              {rivalryRoster.map(b => {
+                const isSelected = selectedBuddyId === b.id;
+                return (
+                  <button
+                    key={b.id}
+                    onClick={() => setSelectedBuddyId(b.id)}
+                    className={`shrink-0 flex items-center space-x-2.5 px-3 py-2 rounded-2xl border transition-all duration-200 text-left ${
+                      isSelected
+                        ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 border-amber-400/80 shadow-lg shadow-amber-500/10 scale-102'
+                        : 'bg-black/40 hover:bg-black/70 border-white/10 hover:border-white/20'
+                    }`}
+                  >
+                    {/* Mini Avatar */}
+                    {b.avatarUrl ? (
+                      <img src={b.avatarUrl} alt={b.displayName} className="w-8 h-8 rounded-full object-cover ring-1 ring-white/20" />
+                    ) : (
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black ring-1 ${
+                        isSelected ? 'bg-amber-500 text-black ring-amber-400' : 'bg-white/10 text-white ring-white/20'
+                      }`}>
+                        {b.displayName.charAt(0)}
+                      </div>
+                    )}
+
+                    <div>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-xs font-bold text-white truncate max-w-[100px]">{b.displayName}</span>
+                        {b.rivalryStatus === 'WINNING' && (
+                          <span className="text-[9px] px-1 rounded bg-emerald-500/20 text-emerald-300 font-bold">W</span>
+                        )}
+                        {b.rivalryStatus === 'LOSING' && (
+                          <span className="text-[9px] px-1 rounded bg-red-500/20 text-red-300 font-bold">L</span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-white/50 font-mono font-bold">
+                        {b.myContestedPoints} - {b.buddyContestedPoints} PTS
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* MARQUEE "TALE OF THE TAPE" CLASH BANNER */}
         {selectedBuddy && (
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* You vs Buddy Avatar Matchup */}
-            <div className="bg-slate-900/90 rounded-2xl p-4 border border-slate-800 flex items-center justify-between">
-              {/* You */}
-              <div className="flex items-center space-x-3">
-                {user?.avatar_url ? (
-                  <img src={user.avatar_url} alt={user.display_name} className="w-12 h-12 rounded-full object-cover ring-2 ring-amber-400/80" />
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-lg ring-2 ring-amber-400">
-                    {user?.display_name?.charAt(0) || 'U'}
-                  </div>
-                )}
-                <div>
-                  <div className="text-[10px] font-bold text-amber-400 uppercase">You</div>
-                  <div className="text-sm font-bold text-white truncate max-w-[90px]">{user?.display_name}</div>
-                  <div className="text-xs text-slate-400 font-semibold">{summary.myWeeklyPoints} pts</div>
-                </div>
-              </div>
+          <div className="mt-5 bg-gradient-to-b from-[#090d14] to-[#040608] rounded-2xl border border-amber-500/30 p-4 sm:p-6 shadow-2xl relative overflow-hidden">
+            {/* Ambient Corner Glows */}
+            <div className="absolute top-0 left-0 w-48 h-48 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
+            <div className="absolute bottom-0 right-0 w-48 h-48 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
 
-              <div className="text-slate-500 font-extrabold text-sm px-2">VS</div>
-
-              {/* Buddy */}
-              <div className="flex items-center space-x-3 text-right">
-                <div>
-                  <div className="text-[10px] font-bold text-indigo-400 uppercase">Opponent</div>
-                  <div className="text-sm font-bold text-white truncate max-w-[90px]">{selectedBuddy.display_name}</div>
-                  <div className="text-xs text-slate-400 font-semibold">{summary.buddyWeeklyPoints} pts</div>
-                </div>
-                {selectedBuddy.avatar_url ? (
-                  <img src={selectedBuddy.avatar_url} alt={selectedBuddy.display_name} className="w-12 h-12 rounded-full object-cover ring-2 ring-indigo-500/80" />
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-lg ring-2 ring-indigo-500">
-                    {selectedBuddy.display_name?.charAt(0) || 'B'}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Agreement Rate Meter */}
-            <div className="bg-slate-900/90 rounded-2xl p-4 border border-slate-800 flex flex-col justify-center">
-              <div className="flex items-center justify-between text-xs mb-1.5">
-                <span className="font-bold text-slate-400 uppercase">Agreement Rate</span>
-                <span className="font-extrabold text-white">{summary.agreementRate}%</span>
-              </div>
-              <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden flex">
-                <div 
-                  className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all duration-500"
-                  style={{ width: `${summary.agreementRate}%` }}
-                />
-              </div>
-              <div className="flex items-center justify-between text-[10px] text-slate-500 mt-2 font-medium">
-                <span className="text-emerald-400 font-bold">{summary.agreedCount} Agreed</span>
-                <span className="text-orange-400 font-bold">{summary.disagreedCount} Clashing</span>
-              </div>
-            </div>
-
-            {/* Rivalry Differential */}
-            <div className="bg-slate-900/90 rounded-2xl p-4 border border-slate-800 flex items-center justify-between">
-              <div>
-                <div className="text-[10px] font-bold text-slate-400 uppercase">Point Differential</div>
-                <div className="text-2xl font-extrabold font-mono mt-0.5">
-                  {summary.pointDifferential > 0 ? (
-                    <span className="text-emerald-400">+{summary.pointDifferential} pts</span>
-                  ) : summary.pointDifferential < 0 ? (
-                    <span className="text-red-400">{summary.pointDifferential} pts</span>
+            <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+              {/* Left Fighter: YOU */}
+              <div className="flex items-center space-x-3.5 bg-black/40 p-3.5 rounded-2xl border border-white/10">
+                <div className="relative shrink-0">
+                  {user?.avatar_url ? (
+                    <img src={user.avatar_url} alt={user.display_name} className="w-14 h-14 rounded-2xl object-cover ring-2 ring-amber-400 shadow-lg" />
                   ) : (
-                    <span className="text-slate-300">Tied (0)</span>
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-black flex items-center justify-center font-black text-xl shadow-lg ring-2 ring-amber-400">
+                      {user?.display_name?.charAt(0) || 'U'}
+                    </div>
+                  )}
+                  <span className="absolute -bottom-1 -right-1 text-[9px] font-black bg-amber-500 text-black px-1.5 py-0.2 rounded-full border border-black">
+                    YOU
+                  </span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-black text-amber-400 uppercase truncate">{user?.display_name}</div>
+                  <div className="text-xs text-white/60 font-semibold truncate">{user?.favorite_team}</div>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <span className="text-xs font-black text-white font-mono bg-white/10 px-1.5 py-0.5 rounded">
+                      {mySeasonRecord?.wins || 0}-{mySeasonRecord?.losses || 0} ({mySeasonRecord?.winRate || 0}%)
+                    </span>
+                    <span className="text-xs font-black text-amber-300 font-mono">
+                      {mySeasonRecord?.totalPoints || 0} PTS
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Center Arena: CONTESTED HEAD-TO-HEAD CLASH SCORE */}
+              <div className="text-center flex flex-col items-center justify-center py-2">
+                <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-black uppercase tracking-widest mb-2 shadow-inner">
+                  <Swords className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Contested Head-to-Head</span>
+                </div>
+
+                {/* Big Bold Head-to-Head Score */}
+                <div className="flex items-center justify-center space-x-4">
+                  <div className="text-right">
+                    <div className="text-2xl sm:text-3xl font-black text-amber-300 font-mono tracking-tight">
+                      {headToHeadClash?.myContestedPoints || 0}
+                    </div>
+                    <div className="text-[10px] uppercase font-bold text-amber-400/70">Your PTS</div>
+                  </div>
+
+                  <div className="text-xs font-black text-white/30 uppercase px-2 py-1 rounded bg-white/5">
+                    VS
+                  </div>
+
+                  <div className="text-left">
+                    <div className="text-2xl sm:text-3xl font-black text-indigo-300 font-mono tracking-tight">
+                      {headToHeadClash?.buddyContestedPoints || 0}
+                    </div>
+                    <div className="text-[10px] uppercase font-bold text-indigo-400/70">Rival PTS</div>
+                  </div>
+                </div>
+
+                {/* Series Status Pill */}
+                <div className="mt-2.5">
+                  {headToHeadClash?.seriesLeader === 'YOU_LEADING' && (
+                    <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                      🏆 LEADING BY {Math.abs(headToHeadClash.pointDifferential)} PTS ({headToHeadClash.myContestedWins}-{headToHeadClash.buddyContestedWins} Split W-L)
+                    </span>
+                  )}
+                  {headToHeadClash?.seriesLeader === 'BUDDY_LEADING' && (
+                    <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/40">
+                      ⚡ TRAILING BY {Math.abs(headToHeadClash.pointDifferential)} PTS ({headToHeadClash.myContestedWins}-{headToHeadClash.buddyContestedWins} Split W-L)
+                    </span>
+                  )}
+                  {headToHeadClash?.seriesLeader === 'TIED' && (
+                    <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-white/10 text-white/80 border border-white/20">
+                      ⚔️ SERIES TIED ({headToHeadClash?.myContestedWins || 0}-{headToHeadClash?.buddyContestedWins || 0} Split W-L)
+                    </span>
                   )}
                 </div>
-                <div className="text-[10px] text-slate-400 mt-1">
-                  {summary.pointDifferential > 0 ? '🏆 You are in the lead!' : summary.pointDifferential < 0 ? '⚡ Chasing your buddy' : '🤝 Dead heat!'}
+
+                {/* Agreement Meter Bar */}
+                <div className="w-full max-w-xs mt-3">
+                  <div className="flex items-center justify-between text-[10px] font-bold text-white/60 mb-1">
+                    <span>Agreement: {summary.agreementRate}%</span>
+                    <span>{summary.agreedCount} Agreed / {summary.disagreedCount} Split</span>
+                  </div>
+                  <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden flex">
+                    <div 
+                      className="bg-gradient-to-r from-emerald-500 to-amber-400 h-full rounded-full transition-all duration-500"
+                      style={{ width: `${summary.agreementRate}%` }}
+                    />
+                  </div>
                 </div>
               </div>
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-                <Award className="w-6 h-6" />
+
+              {/* Right Fighter: RIVAL */}
+              <div className="flex items-center space-x-3.5 bg-black/40 p-3.5 rounded-2xl border border-white/10 justify-end text-right">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-black text-indigo-400 uppercase truncate">{selectedBuddy.display_name}</div>
+                  <div className="text-xs text-white/60 font-semibold truncate">{selectedBuddy.favorite_team}</div>
+                  <div className="flex items-center justify-end space-x-2 mt-1">
+                    <span className="text-xs font-black text-indigo-300 font-mono">
+                      {buddySeasonRecord?.totalPoints || 0} PTS
+                    </span>
+                    <span className="text-xs font-black text-white font-mono bg-white/10 px-1.5 py-0.5 rounded">
+                      {buddySeasonRecord?.wins || 0}-{buddySeasonRecord?.losses || 0} ({buddySeasonRecord?.winRate || 0}%)
+                    </span>
+                  </div>
+                </div>
+                <div className="relative shrink-0">
+                  {selectedBuddy.avatar_url ? (
+                    <img src={selectedBuddy.avatar_url} alt={selectedBuddy.display_name} className="w-14 h-14 rounded-2xl object-cover ring-2 ring-indigo-500 shadow-lg" />
+                  ) : (
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-black text-xl shadow-lg ring-2 ring-indigo-500">
+                      {selectedBuddy.display_name?.charAt(0) || 'B'}
+                    </div>
+                  )}
+                  <span className="absolute -bottom-1 -right-1 text-[9px] font-black bg-indigo-500 text-white px-1.5 py-0.2 rounded-full border border-black">
+                    RIVAL
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -416,153 +512,105 @@ export function BuddyComparison({ parties, currentWeek, currentYear }) {
         </div>
       ) : (
         <>
-          {/* Confidence Records Panel */}
-          <div className="bg-[#0e1218] border border-white/10 rounded-3xl p-5 shadow-2xl">
-            <div className="flex items-center space-x-2 mb-4">
-              <span className="text-base">🔥</span>
-              <h3 className="text-sm font-extrabold text-white uppercase tracking-wide">Party Confidence Pick Records</h3>
-              <span className="text-[10px] text-[#9a978a] ml-2">Season totals for graded games only</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-left border-b border-white/10">
-                    <th className="pb-2 pr-4 font-bold text-[#9a978a] uppercase text-[10px]">Member</th>
-                    <th className="pb-2 pr-4 font-bold text-[#9a978a] uppercase text-[10px] text-center">🔥 High</th>
-                    <th className="pb-2 pr-4 font-bold text-[#9a978a] uppercase text-[10px] text-center">👍 Medium</th>
-                    <th className="pb-2 font-bold text-[#9a978a] uppercase text-[10px] text-center">🤷 Low</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...buddies].map(b => (
-                    <tr key={b.id} className="border-b border-white/5 hover:bg-white/5 transition">
-                      <td className="py-2.5 pr-4">
-                        <div className="flex items-center space-x-2">
-                          {b.avatar_url ? (
-                            <img src={b.avatar_url} alt={b.display_name} className="w-6 h-6 rounded-full object-cover" />
-                          ) : (
-                            <div className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-[10px] font-bold">
-                              {b.display_name?.charAt(0)}
-                            </div>
-                          )}
-                          <span className="font-bold text-white truncate max-w-[120px]">{b.display_name}</span>
-                        </div>
-                      </td>
-                      <td className="py-2.5 pr-4 text-center">
-                        {b.high_conf_total > 0 ? (
-                          <span className="font-black text-[#86efac] font-mono">
-                            {b.high_conf_correct}-{b.high_conf_total - b.high_conf_correct}
-                          </span>
-                        ) : (
-                          <span className="text-[#9a978a]">—</span>
-                        )}
-                      </td>
-                      <td className="py-2.5 pr-4 text-center">
-                        {b.med_conf_total > 0 ? (
-                          <span className="font-black text-[#60a5fa] font-mono">
-                            {b.med_conf_correct}-{b.med_conf_total - b.med_conf_correct}
-                          </span>
-                        ) : (
-                          <span className="text-[#9a978a]">—</span>
-                        )}
-                      </td>
-                      <td className="py-2.5 text-center">
-                        {b.low_conf_total > 0 ? (
-                          <span className="font-black text-[#9a978a] font-mono">
-                            {b.low_conf_correct}-{b.low_conf_total - b.low_conf_correct}
-                          </span>
-                        ) : (
-                          <span className="text-[#9a978a]">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Filter Tabs */}
+          {/* Filter & View Mode Tabs */}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center space-x-2 bg-slate-900 p-1 rounded-2xl border border-slate-800">
+            <div className="flex items-center space-x-1.5 bg-black/60 p-1.5 rounded-2xl border border-white/10 shadow-inner">
               <button
                 onClick={() => setFilterMode('ALL')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
                   filterMode === 'ALL'
-                    ? 'bg-amber-500 text-slate-950 font-black shadow'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20'
+                    : 'text-white/60 hover:text-white'
                 }`}
               >
-                All 2026 Matchups ({comparisons.length})
-              </button>
-              <button
-                onClick={() => setFilterMode('AGREED')}
-                className={`flex items-center space-x-1 px-4 py-2 rounded-xl text-xs font-bold transition ${
-                  filterMode === 'AGREED'
-                    ? 'bg-emerald-500 text-slate-950 font-black shadow'
-                    : 'text-emerald-400 hover:bg-slate-800'
-                }`}
-              >
-                <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                <span>Agreed Picks ({summary.agreedCount})</span>
+                All Matchups ({comparisons.length})
               </button>
               <button
                 onClick={() => setFilterMode('DISAGREED')}
-                className={`flex items-center space-x-1 px-4 py-2 rounded-xl text-xs font-bold transition ${
+                className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
                   filterMode === 'DISAGREED'
-                    ? 'bg-orange-500 text-slate-950 font-black shadow'
-                    : 'text-orange-400 hover:bg-slate-800'
+                    ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
+                    : 'text-orange-400 hover:bg-white/5'
                 }`}
               >
                 <Swords className="w-3.5 h-3.5 mr-1" />
-                <span>Split / Rivalry Picks ({summary.disagreedCount})</span>
+                <span>Split Rivalry ({summary.disagreedCount})</span>
               </button>
+              <button
+                onClick={() => setFilterMode('AGREED')}
+                className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+                  filterMode === 'AGREED'
+                    ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20'
+                    : 'text-emerald-400 hover:bg-white/5'
+                }`}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                <span>Consensus ({summary.agreedCount})</span>
+              </button>
+              {lockClashes.length > 0 && (
+                <button
+                  onClick={() => setFilterMode('LOCKS')}
+                  className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+                    filterMode === 'LOCKS'
+                      ? 'bg-amber-400 text-black shadow-lg shadow-amber-400/20 animate-pulse'
+                      : 'text-amber-300 hover:bg-white/5'
+                  }`}
+                >
+                  <Star className="w-3.5 h-3.5 mr-1 fill-amber-400" />
+                  <span>Lock Clashes ({lockClashes.length})</span>
+                </button>
+              )}
             </div>
 
-            <div className="text-xs text-slate-400">
-              Comparing Week <span className="text-amber-400 font-bold">{currentWeek}</span> (2026 Season)
+            <div className="text-xs text-white/50">
+              Week <span className="text-amber-400 font-bold">{currentWeek}</span> Slate
             </div>
           </div>
 
-          {/* Comparisons List */}
+          {/* Comparisons Matchup List */}
           {loading ? (
-            <div className="text-center py-16 text-slate-400">
+            <div className="text-center py-16 text-white/50">
               <div className="animate-spin w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full mx-auto mb-3"></div>
-              Loading head-to-head comparison matrix...
+              Loading head-to-head matchup matrix...
             </div>
           ) : filteredComparisons.length === 0 ? (
-            <div className="bg-slate-900/60 rounded-3xl p-12 text-center border border-slate-800 text-slate-400">
-              <Shield className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-              <h3 className="text-lg font-bold text-white mb-1">No picks match this filter for Week {currentWeek}</h3>
-              <p className="text-sm text-slate-500 max-w-md mx-auto">
-                Head to the <strong>Make Picks</strong> tab to submit your predictions for this matchup!
+            <div className="bg-[#0e1218] rounded-3xl p-12 text-center border border-white/10 text-white/50">
+              <Shield className="w-12 h-12 text-white/20 mx-auto mb-3" />
+              <h3 className="text-lg font-bold text-white mb-1">No matchups found for this filter</h3>
+              <p className="text-sm text-white/40 max-w-md mx-auto">
+                {filterMode === 'DISAGREED' ? 'You and your buddy made identical predictions on all games!' : 'Submit your predictions in Make Picks to compare results!'}
               </p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3.5">
               {filteredComparisons.map((c) => {
                 const g = c.game;
                 const myPick = c.myPick;
                 const buddyPick = c.buddyPick;
+                const isSplit = c.comparisonStatus === 'DISAGREED';
 
                 return (
                   <div 
                     key={g.id}
-                    className="bg-[#0e1218] border border-white/10 rounded-3xl p-5 shadow-2xl hover:border-white/20 transition space-y-4"
+                    className={`rounded-2xl p-4 sm:p-5 border transition-all duration-200 ${
+                      isSplit
+                        ? 'bg-gradient-to-br from-[#121008] via-[#0e1218] to-[#120808] border-orange-500/30 shadow-xl'
+                        : 'bg-[#0e1218] border-white/10 shadow-lg'
+                    }`}
                   >
                     {/* Game Matchup Header */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-white/5">
                       <div className="flex items-center space-x-3">
                         <div className="flex items-center space-x-2">
                           <img src={g.awayTeam.logo} alt={g.awayTeam.name} className="w-6 h-6 object-contain" />
-                          <span className="font-bold text-white text-sm">
+                          <span className="font-bold text-white text-xs sm:text-sm">
                             {g.awayTeam.rank ? `#${g.awayTeam.rank} ` : ''}{g.awayTeam.name}
                           </span>
                         </div>
-                        <span className="text-[#9a978a] font-black text-xs">@</span>
+                        <span className="text-white/40 font-black text-xs">@</span>
                         <div className="flex items-center space-x-2">
                           <img src={g.homeTeam.logo} alt={g.homeTeam.name} className="w-6 h-6 object-contain" />
-                          <span className="font-bold text-white text-sm">
+                          <span className="font-bold text-white text-xs sm:text-sm">
                             {g.homeTeam.rank ? `#${g.homeTeam.rank} ` : ''}{g.homeTeam.name}
                           </span>
                         </div>
@@ -570,41 +618,42 @@ export function BuddyComparison({ parties, currentWeek, currentYear }) {
 
                       {/* Status / Agreement Badge */}
                       <div className="flex items-center space-x-2">
-                        {c.comparisonStatus === 'AGREED' && (
-                          <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase flex items-center space-x-1">
-                            <CheckCircle2 className="w-3 h-3" />
-                            <span>Agreed Pick</span>
-                          </span>
-                        )}
-                        {c.comparisonStatus === 'DISAGREED' && (
-                          <span className="px-2.5 py-1 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30 text-[10px] font-black uppercase flex items-center space-x-1">
+                        {isSplit ? (
+                          <span className="px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30 text-[10px] font-black uppercase flex items-center space-x-1">
                             <Swords className="w-3 h-3" />
-                            <span>Split Rivalry Pick</span>
+                            <span>Split Rivalry Matchup</span>
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase flex items-center space-x-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Agreed Consensus</span>
                           </span>
                         )}
-                        <span className="text-[10px] text-[#9a978a] font-medium">
-                          {g.statusDetail || '2026 Matchup'}
+                        <span className="text-[10px] text-white/40 font-medium">
+                          {g.odds || g.broadcast || '2026 Matchup'}
                         </span>
                       </div>
                     </div>
 
                     {/* Head-to-Head Comparison Boxes */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3">
                       {/* Your Pick Box */}
                       <div className={`p-3.5 rounded-2xl border transition ${
                         myPick 
-                          ? 'bg-black/50 border-amber-500/30' 
-                          : 'bg-black/20 border-white/5 text-[#9a978a]'
+                          ? 'bg-black/60 border-amber-500/40 shadow-inner' 
+                          : 'bg-black/20 border-white/5 text-white/40'
                       }`}>
                         <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-[10px] uppercase font-bold text-amber-400">Your Prediction</span>
-                          {myPick?.confidence_level && (
-                            <span className="text-[10px] text-amber-300 font-bold">
-                              {myPick.confidence_level === 3 ? '🔥 High' : myPick.confidence_level === 2 ? '👍 Medium' : '🤷 Low'}
+                          <span className="text-[10px] uppercase font-bold text-amber-400 flex items-center space-x-1">
+                            <span>YOUR PICK</span>
+                          </span>
+                          {myPick?.confidence_points && (
+                            <span className="text-[10px] text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                              {myPick.confidence_points * 10} PTS {myPick.confidence_level === 3 ? '⭐️⭐️⭐️' : myPick.confidence_level === 2 ? '⭐️⭐️' : '⭐️'}
                             </span>
                           )}
                         </div>
-                        <div className="font-extrabold text-white text-sm">
+                        <div className="font-black text-white text-sm">
                           {myPick?.predicted_winner_name || 'No prediction made'}
                         </div>
                       </div>
@@ -612,20 +661,20 @@ export function BuddyComparison({ parties, currentWeek, currentYear }) {
                       {/* Buddy Pick Box */}
                       <div className={`p-3.5 rounded-2xl border transition ${
                         buddyPick 
-                          ? 'bg-black/50 border-indigo-500/30' 
-                          : 'bg-black/20 border-white/5 text-[#9a978a]'
+                          ? 'bg-black/60 border-indigo-500/40 shadow-inner' 
+                          : 'bg-black/20 border-white/5 text-white/40'
                       }`}>
                         <div className="flex items-center justify-between mb-1.5">
                           <span className="text-[10px] uppercase font-bold text-indigo-400">
-                            {selectedBuddy?.display_name || 'Buddy'}
+                            {selectedBuddy?.display_name || 'RIVAL'}'S PICK
                           </span>
-                          {buddyPick?.confidence_level && (
-                            <span className="text-[10px] text-indigo-300 font-bold">
-                              {buddyPick.confidence_level === 3 ? '🔥 High' : buddyPick.confidence_level === 2 ? '👍 Medium' : '🤷 Low'}
+                          {buddyPick?.confidence_points && (
+                            <span className="text-[10px] text-indigo-300 font-bold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                              {buddyPick.confidence_points * 10} PTS {buddyPick.confidence_level === 3 ? '⭐️⭐️⭐️' : buddyPick.confidence_level === 2 ? '⭐️⭐️' : '⭐️'}
                             </span>
                           )}
                         </div>
-                        <div className="font-extrabold text-white text-sm">
+                        <div className="font-black text-white text-sm">
                           {buddyPick?.predicted_winner_name || 'No prediction made'}
                         </div>
                       </div>

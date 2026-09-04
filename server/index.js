@@ -58,8 +58,8 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
 });
 
-// Only start listening if NOT running in a serverless environment like Vercel
-if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME && !process.env.LAMBDA_TASK_ROOT) {
+// Only start listening if NOT running in a serverless environment like Vercel and executed directly
+if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME && !process.env.LAMBDA_TASK_ROOT && require.main === module) {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🏈 CFB Prediction Party server is running on http://localhost:${PORT} and http://127.0.0.1:${PORT}`);
   });
