@@ -117,6 +117,7 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
   const [liveGames, setLiveGames] = useState([]);
   const [userPicks, setUserPicks] = useState([]);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [isPaused, setIsPaused] = useState(false);
   const pollTimerRef = useRef(null);
 
   useEffect(() => {
@@ -223,8 +224,6 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
   userPicks.forEach(p => {
     if (p.game_id) picksMap.set(String(p.game_id), p);
   });
-
-  const [isPaused, setIsPaused] = useState(false);
 
   // Duplicate the games array to create an infinite seamless loop
   const marqueeGames = [...liveGames, ...liveGames];
