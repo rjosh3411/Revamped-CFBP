@@ -324,7 +324,7 @@ export function GameCard({ game, onPick, isSaving }) {
                 {userPick.is_correct === 0 && (
                   <span className="flex items-center text-xs font-bold text-red-400 bg-red-950/60 px-2 py-0.5 rounded border border-red-500/40">
                     <XCircle className="w-3.5 h-3.5 mr-1" />
-                    Missed (0 pts)
+                    Missed ({userPick.points_awarded !== undefined && userPick.points_awarded !== null ? `${userPick.points_awarded > 0 ? `-${userPick.points_awarded}` : userPick.points_awarded}` : `-${(userPick.confidence_points || 1) * 10}`} pts)
                   </span>
                 )}
                 {userPick.is_correct === null && (
