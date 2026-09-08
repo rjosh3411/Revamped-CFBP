@@ -18,7 +18,7 @@ module.exports = (req, res) => {
   }
   return app(req, res);
 };
-// Vercel redeploy Tue Sep  8 17:00:00 EDT 2026 - Official ESPN AP Top 25 live sync & continuous weekly polling
+// Vercel redeploy Tue Sep  8 17:10:00 EDT 2026 - Over/Under Total Score Bonus (+10 PTS) feature added
 
 
 

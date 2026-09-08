@@ -705,18 +705,31 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
                           ? 'bg-black/60 border-amber-500/40 shadow-inner' 
                           : 'bg-black/20 border-white/5 text-white/40'
                       }`}>
-                        <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
                           <span className="text-[10px] uppercase font-bold text-amber-400 flex items-center space-x-1">
                             <span>YOUR PICK</span>
                           </span>
-                          {myPick?.confidence_points && (
-                            <span className="text-[10px] text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                              {myPick.confidence_points * 10} PTS {myPick.confidence_level === 3 ? '⭐️⭐️⭐️' : myPick.confidence_level === 2 ? '⭐️⭐️' : '⭐️'}
-                            </span>
-                          )}
+                          <div className="flex items-center space-x-1.5 flex-wrap">
+                            {myPick?.confidence_points && (
+                              <span className="text-[10px] text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                {myPick.confidence_level === 3 ? '3x Lock (+30 PTS)' : myPick.confidence_level === 2 ? '2x Med (+20 PTS)' : '1x (+10 PTS)'}
+                              </span>
+                            )}
+                            {myPick?.over_under_pick && (
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${
+                                myPick.is_ou_correct === 1
+                                  ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40'
+                                  : myPick.is_ou_correct === 0
+                                    ? 'bg-slate-800 text-slate-400 border-slate-700'
+                                    : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                              }`}>
+                                {myPick.over_under_pick} {myPick.over_under_line || ''} {myPick.is_ou_correct === 1 ? '(+10 Bonus)' : '(+10 Bonus PTS)'}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <div className="font-black text-white text-sm">
-                          {myPick?.predicted_winner_name || 'No prediction made'}
+                          {myPick?.predicted_winner_name || (myPick?.over_under_pick ? `O/U: ${myPick.over_under_pick} ${myPick.over_under_line || ''}` : 'No prediction made')}
                         </div>
                       </div>
 
@@ -726,18 +739,31 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
                           ? 'bg-black/60 border-indigo-500/40 shadow-inner' 
                           : 'bg-black/20 border-white/5 text-white/40'
                       }`}>
-                        <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
                           <span className="text-[10px] uppercase font-bold text-indigo-400">
                             {buddyName}'S PICK
                           </span>
-                          {buddyPick?.confidence_points && (
-                            <span className="text-[10px] text-indigo-300 font-bold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
-                              {buddyPick.confidence_points * 10} PTS {buddyPick.confidence_level === 3 ? '⭐️⭐️⭐️' : buddyPick.confidence_level === 2 ? '⭐️⭐️' : '⭐️'}
-                            </span>
-                          )}
+                          <div className="flex items-center space-x-1.5 flex-wrap">
+                            {buddyPick?.confidence_points && (
+                              <span className="text-[10px] text-indigo-300 font-bold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                                {buddyPick.confidence_level === 3 ? '3x Lock (+30 PTS)' : buddyPick.confidence_level === 2 ? '2x Med (+20 PTS)' : '1x (+10 PTS)'}
+                              </span>
+                            )}
+                            {buddyPick?.over_under_pick && (
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${
+                                buddyPick.is_ou_correct === 1
+                                  ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40'
+                                  : buddyPick.is_ou_correct === 0
+                                    ? 'bg-slate-800 text-slate-400 border-slate-700'
+                                    : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                              }`}>
+                                {buddyPick.over_under_pick} {buddyPick.over_under_line || ''} {buddyPick.is_ou_correct === 1 ? '(+10 Bonus)' : '(+10 Bonus PTS)'}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <div className="font-black text-white text-sm">
-                          {buddyPick?.predicted_winner_name || 'No prediction made'}
+                          {buddyPick?.predicted_winner_name || (buddyPick?.over_under_pick ? `O/U: ${buddyPick.over_under_pick} ${buddyPick.over_under_line || ''}` : 'No prediction made')}
                         </div>
                       </div>
                     </div>

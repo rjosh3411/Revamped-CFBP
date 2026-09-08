@@ -13,25 +13,43 @@ export function GameCard({ game, onPick, isSaving }) {
   const pickId = userPick?.predicted_winner_id || userPick?.predictedWinnerId || null;
   const pickName = userPick?.predicted_winner_name || userPick?.predictedWinnerName || null;
   const pickConfidence = userPick?.confidence_points || userPick?.confidencePoints || userPick?.confidence_level || userPick?.confidenceLevel || 1;
+  const pickOu = userPick?.over_under_pick || userPick?.overUnderPick || null;
 
   const [selectedTeamId, setSelectedTeamId] = useState(pickId);
   const [confidence, setConfidence] = useState(pickConfidence);
+  const [overUnderPick, setOverUnderPick] = useState(pickOu);
+
+  // Determine line for total score
+  const getOverUnderLine = () => {
+    if (game.overUnder) return parseFloat(game.overUnder);
+    if (game.odds && typeof game.odds === 'object' && game.odds.overUnder) return parseFloat(game.odds.overUnder);
+    if (typeof game.odds === 'string') {
+      const match = game.odds.match(/O\/U\s*([\d.]+)/i) || game.odds.match(/([\d.]+)o/i);
+      if (match) return parseFloat(match[1]);
+    }
+    return 52.5;
+  };
+
+  const ouLine = getOverUnderLine();
 
   useEffect(() => {
-    if (pickId) {
+    if (pickId !== undefined) {
       setSelectedTeamId(pickId);
     }
-    if (pickConfidence) {
+    if (pickConfidence !== undefined) {
       setConfidence(pickConfidence);
     }
-  }, [pickId, pickConfidence]);
+    if (pickOu !== undefined) {
+      setOverUnderPick(pickOu);
+    }
+  }, [pickId, pickConfidence, pickOu]);
 
   const isFinal = game.isFinal;
   const isInProgress = game.isInProgress;
-  const hasPick = !!userPick || !!selectedTeamId;
+  const hasPick = !!userPick || !!selectedTeamId || !!overUnderPick;
 
   const effectiveWinnerId = selectedTeamId || pickId || null;
-  const effectiveWinnerName = pickName || null;
+  const effectiveWinnerName = pickName || (effectiveWinnerId === home.id ? home.name : (effectiveWinnerId === away.id ? away.name : null));
 
   const isAwaySelected = !!(effectiveWinnerId && (
     effectiveWinnerId === away.id ||
@@ -60,7 +78,9 @@ export function GameCard({ game, onPick, isSaving }) {
         predictedWinnerId: teamId,
         predictedWinnerName: teamName,
         confidencePoints: confidence,
-        confidenceLevel: confidence
+        confidenceLevel: confidence,
+        overUnderPick: overUnderPick,
+        overUnderLine: ouLine
       });
 
       // Subtle celebration confetti
@@ -88,8 +108,41 @@ export function GameCard({ game, onPick, isSaving }) {
         predictedWinnerId: chosenWinnerId,
         predictedWinnerName: chosenWinnerName,
         confidencePoints: pts,
-        confidenceLevel: pts
+        confidenceLevel: pts,
+        overUnderPick: overUnderPick,
+        overUnderLine: ouLine
       });
+    }
+  };
+
+  const handleToggleOverUnder = (type) => {
+    if (isFinal) return;
+    const nextPick = overUnderPick === type ? null : type;
+    setOverUnderPick(nextPick);
+
+    if (onPick) {
+      onPick({
+        gameId: game.id,
+        seasonYear: game.seasonYear || 2026,
+        weekNumber: game.weekNumber || 1,
+        predictedWinnerId: effectiveWinnerId,
+        predictedWinnerName: effectiveWinnerName,
+        confidencePoints: confidence,
+        confidenceLevel: confidence,
+        overUnderPick: nextPick,
+        overUnderLine: nextPick ? ouLine : null
+      });
+
+      if (nextPick) {
+        try {
+          confetti({
+            particleCount: 15,
+            spread: 45,
+            origin: { y: 0.85 },
+            colors: ['#f59e0b', '#fbbf24']
+          });
+        } catch (e) {}
+      }
     }
   };
 
@@ -307,6 +360,61 @@ export function GameCard({ game, onPick, isSaving }) {
             )}
           </div>
         )}
+
+        {/* Over/Under Total Score Bonus Prediction Selector */}
+        <div className="mt-2.5 pt-2.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center space-x-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Total Score ({ouLine} PTS):
+            </span>
+            <div className="flex items-center space-x-1.5">
+              <button
+                type="button"
+                disabled={isFinal}
+                onClick={() => handleToggleOverUnder('OVER')}
+                className={`px-3 py-1 rounded-xl text-[11px] font-black tracking-wider transition cursor-pointer ${
+                  overUnderPick === 'OVER'
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/20 scale-105 ring-1 ring-amber-300'
+                    : isFinal
+                      ? 'bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                }`}
+              >
+                OVER {ouLine}
+              </button>
+              <button
+                type="button"
+                disabled={isFinal}
+                onClick={() => handleToggleOverUnder('UNDER')}
+                className={`px-3 py-1 rounded-xl text-[11px] font-black tracking-wider transition cursor-pointer ${
+                  overUnderPick === 'UNDER'
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/20 scale-105 ring-1 ring-amber-300'
+                    : isFinal
+                      ? 'bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                }`}
+              >
+                UNDER {ouLine}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-1.5">
+            {userPick?.is_ou_correct === 1 ? (
+              <span className="text-[10px] font-black text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/40">
+                O/U Won (+10 PTS Bonus)
+              </span>
+            ) : userPick?.is_ou_correct === 0 ? (
+              <span className="text-[10px] font-bold text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
+                O/U Missed (0 PTS)
+              </span>
+            ) : (
+              <span className="text-[10px] font-extrabold text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                +10 Bonus PTS (0 Penalty)
+              </span>
+            )}
+          </div>
+        </div>
 
         {/* Prediction Status & Confidence Bar */}
         <div className="mt-3 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2">

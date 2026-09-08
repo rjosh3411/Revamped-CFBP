@@ -140,14 +140,21 @@ router.get('/my-stats', authenticateToken, async (req, res) => {
 // POST /api/picks
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { gameId, seasonYear = 2026, weekNumber = 1, predictedWinnerId, predictedWinnerName, confidencePoints, confidenceLevel } = req.body;
+    const { 
+      gameId, 
+      seasonYear = 2026, 
+      weekNumber = 1, 
+      predictedWinnerId, 
+      predictedWinnerName, 
+      confidencePoints, 
+      confidenceLevel,
+      overUnderPick,
+      overUnderLine
+    } = req.body;
 
-    if (!gameId || !predictedWinnerId || !predictedWinnerName) {
-      return res.status(400).json({ error: 'gameId, predictedWinnerId, and predictedWinnerName are required' });
+    if (!gameId) {
+      return res.status(400).json({ error: 'gameId is required' });
     }
-
-    const rawConf = parseInt(confidenceLevel !== undefined && confidenceLevel !== null ? confidenceLevel : (confidencePoints || 1), 10);
-    const safeConf = [1, 2, 3].includes(rawConf) ? rawConf : 1;
 
     // Check game status
     const game = await db.prepare('SELECT * FROM games_cache WHERE game_id = ?').get(gameId);
@@ -161,17 +168,41 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    let isCorrect = null;
-    let pointsAwarded = 0;
+    const existingPick = await db.prepare('SELECT * FROM picks WHERE user_id = ? AND game_id = ?').get(req.user.id, gameId);
 
-    const pickId = 'pk_' + crypto.randomBytes(8).toString('hex');
+    const winnerId = predictedWinnerId || existingPick?.predicted_winner_id || null;
+    const winnerName = predictedWinnerName || existingPick?.predicted_winner_name || null;
+
+    if (!winnerId && !winnerName && !overUnderPick) {
+      return res.status(400).json({ error: 'A predicted winner or over/under pick is required' });
+    }
+
+    const rawConf = parseInt(confidenceLevel !== undefined && confidenceLevel !== null ? confidenceLevel : (confidencePoints || existingPick?.confidence_points || 1), 10);
+    const safeConf = [1, 2, 3].includes(rawConf) ? rawConf : 1;
+
+    const validOuPick = ['OVER', 'UNDER'].includes(String(overUnderPick).toUpperCase()) 
+      ? String(overUnderPick).toUpperCase() 
+      : (overUnderPick === null ? null : (existingPick?.over_under_pick || null));
+
+    const validOuLine = overUnderLine !== undefined && overUnderLine !== null 
+      ? (parseFloat(overUnderLine) || null) 
+      : (overUnderPick === null ? null : (existingPick?.over_under_line || null));
+
+    let isCorrect = existingPick?.is_correct ?? null;
+    let pointsAwarded = existingPick?.points_awarded ?? 0;
+    let isOuCorrect = existingPick?.is_ou_correct ?? null;
+    let ouPointsAwarded = existingPick?.ou_points_awarded ?? 0;
+
+    const pickId = existingPick?.id || ('pk_' + crypto.randomBytes(8).toString('hex'));
 
     const upsertStmt = db.prepare(`
       INSERT INTO picks (
         id, user_id, game_id, season_year, week_number, predicted_winner_id, predicted_winner_name,
-        confidence_points, confidence_level, is_correct, points_awarded, updated_at
+        confidence_points, confidence_level, is_correct, points_awarded,
+        over_under_pick, over_under_line, is_ou_correct, ou_points_awarded,
+        updated_at
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
       )
       ON CONFLICT(user_id, game_id) DO UPDATE SET
         predicted_winner_id = excluded.predicted_winner_id,
@@ -180,6 +211,10 @@ router.post('/', authenticateToken, async (req, res) => {
         confidence_level = excluded.confidence_level,
         is_correct = excluded.is_correct,
         points_awarded = excluded.points_awarded,
+        over_under_pick = excluded.over_under_pick,
+        over_under_line = excluded.over_under_line,
+        is_ou_correct = excluded.is_ou_correct,
+        ou_points_awarded = excluded.ou_points_awarded,
         updated_at = CURRENT_TIMESTAMP
     `);
 
@@ -189,12 +224,16 @@ router.post('/', authenticateToken, async (req, res) => {
       gameId,
       parseInt(seasonYear, 10) || 2026,
       parseInt(weekNumber, 10) || 1,
-      predictedWinnerId,
-      predictedWinnerName,
+      winnerId,
+      winnerName,
       safeConf,
       safeConf,
       isCorrect,
-      pointsAwarded
+      pointsAwarded,
+      validOuPick,
+      validOuLine,
+      isOuCorrect,
+      ouPointsAwarded
     );
 
     const savedPick = await db.prepare('SELECT * FROM picks WHERE user_id = ? AND game_id = ?').get(req.user.id, gameId);

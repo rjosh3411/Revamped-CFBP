@@ -14,6 +14,7 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
   const [scheduleData, setScheduleData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [confidenceLevels, setConfidenceLevels] = useState({});
+  const [overUnderPicks, setOverUnderPicks] = useState({});
   const [mascotBounce, setMascotBounce] = useState(false);
 
   useEffect(() => {
@@ -28,14 +29,20 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
       const data = await api.getTeamSchedule(team.id);
       const schedule = data?.schedule || [];
       setScheduleData(schedule);
-      const existing = {};
+      const existingConf = {};
+      const existingOu = {};
       schedule.forEach(g => {
         const conf = g.userPick?.confidence_level || g.userPick?.confidenceLevel || g.userPick?.confidence_points || g.userPick?.confidencePoints;
         if (conf) {
-          existing[g.gameId] = conf;
+          existingConf[g.gameId] = conf;
+        }
+        const ou = g.userPick?.over_under_pick || g.userPick?.overUnderPick;
+        if (ou) {
+          existingOu[g.gameId] = ou;
         }
       });
-      setConfidenceLevels(existing);
+      setConfidenceLevels(existingConf);
+      setOverUnderPicks(existingOu);
     } catch (err) {
       console.error('Failed to load team schedule:', err);
     } finally {
@@ -52,7 +59,9 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
     const oppName = game.opponent?.name || game.opponentName || game.opponent || 'Opponent';
     const winnerName = isWin ? team.name : oppName;
     const winnerId = isWin ? team.id : oppName.toLowerCase().replace(/\s+/g, '-');
-    const currentConfidence = confidenceLevels[gameId] || null;
+    const currentConfidence = confidenceLevels[gameId] || 1;
+    const currentOu = overUnderPicks[gameId] || null;
+    const ouLine = game.bettingLine?.overUnder || 52.5;
 
     try {
       await api.submitPick({
@@ -61,8 +70,10 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
         weekNumber: game.week,
         predictedWinnerId: winnerId,
         predictedWinnerName: winnerName,
-        confidencePoints: 1,
-        confidenceLevel: currentConfidence
+        confidencePoints: currentConfidence,
+        confidenceLevel: currentConfidence,
+        overUnderPick: currentOu,
+        overUnderLine: currentOu ? ouLine : null
       });
 
       // Update local state
@@ -79,7 +90,9 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
               confidence_level: currentConfidence,
               confidenceLevel: currentConfidence,
               confidence_points: currentConfidence,
-              confidencePoints: currentConfidence
+              confidencePoints: currentConfidence,
+              over_under_pick: currentOu,
+              over_under_line: currentOu ? ouLine : null
             }
           };
         }
@@ -113,6 +126,8 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
     if (!game.userPrediction) return; // Only allow on picked games
     const newLevel = confidenceLevels[gameId] === level ? null : level; // Toggle off if same
     setConfidenceLevels(prev => ({ ...prev, [gameId]: newLevel }));
+    const currentOu = overUnderPicks[gameId] || null;
+    const ouLine = game.bettingLine?.overUnder || 52.5;
 
     try {
       const winnerName = game.userPick?.predicted_winner_name || game.userPick?.predictedWinnerName;
@@ -124,11 +139,69 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
         weekNumber: game.week,
         predictedWinnerId: winnerId,
         predictedWinnerName: winnerName,
-        confidencePoints: 1,
-        confidenceLevel: newLevel
+        confidencePoints: newLevel || 1,
+        confidenceLevel: newLevel,
+        overUnderPick: currentOu,
+        overUnderLine: currentOu ? ouLine : null
       });
     } catch (err) {
       console.error('Failed to save confidence:', err);
+    }
+  };
+
+  const handleToggleOverUnder = async (gameId, type, game) => {
+    if (game.isLocked || game.isFinal) return;
+    const currentPick = overUnderPicks[gameId] || null;
+    const nextPick = currentPick === type ? null : type;
+    setOverUnderPicks(prev => ({ ...prev, [gameId]: nextPick }));
+
+    const oppName = game.opponent?.name || game.opponentName || game.opponent || 'Opponent';
+    const winnerName = game.userPick?.predicted_winner_name || (game.userPrediction === 'WIN' ? team.name : (game.userPrediction === 'LOSS' ? oppName : null));
+    const winnerId = game.userPick?.predicted_winner_id || (game.userPrediction === 'WIN' ? team.id : (game.userPrediction === 'LOSS' ? oppName.toLowerCase().replace(/\s+/g, '-') : null));
+    const currentConf = confidenceLevels[gameId] || 1;
+    const ouLine = game.bettingLine?.overUnder || 52.5;
+
+    try {
+      await api.submitPick({
+        gameId,
+        seasonYear: 2026,
+        weekNumber: game.week,
+        predictedWinnerId: winnerId,
+        predictedWinnerName: winnerName,
+        confidencePoints: currentConf,
+        confidenceLevel: currentConf,
+        overUnderPick: nextPick,
+        overUnderLine: nextPick ? ouLine : null
+      });
+
+      setScheduleData(prev => prev.map(g => {
+        if (g.gameId === gameId) {
+          return {
+            ...g,
+            userPick: {
+              ...(g.userPick || {}),
+              over_under_pick: nextPick,
+              over_under_line: nextPick ? ouLine : null
+            }
+          };
+        }
+        return g;
+      }));
+
+      onPickChanged && onPickChanged();
+
+      if (nextPick) {
+        try {
+          confetti({
+            particleCount: 15,
+            spread: 45,
+            origin: { y: 0.8 },
+            colors: ['#f59e0b', '#fbbf24']
+          });
+        } catch (e) {}
+      }
+    } catch (err) {
+      console.error('Failed to save Over/Under pick:', err);
     }
   };
 
@@ -497,40 +570,81 @@ export function TeamScheduleView({ team, onBack, onPickChanged }) {
                   </div>
                 </div>
 
-                {/* Inline Confidence Selector — appears only after a pick is made, hidden on locked games */}
-                {(isWin || isLoss) && !isLocked && (
-                  <div className="mt-3 pt-3 border-t border-white/5 flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] font-black uppercase text-[#9a978a] tracking-wider mr-1">
-                      Confidence:
+                {/* Over/Under Total Score Bonus Selector & Confidence Row */}
+                <div className="mt-3 pt-3 border-t border-white/5 flex flex-wrap items-center justify-between gap-3">
+                  {/* Left: Over/Under Bonus Buttons */}
+                  <div className="flex items-center space-x-2 flex-wrap gap-1">
+                    <span className="text-[10px] font-black uppercase text-[#9a978a] tracking-wider">
+                      O/U ({odds.overUnder || 52.5} PTS):
                     </span>
-                    {[
-                      { level: 1, label: '1x Low' },
-                      { level: 2, label: '2x Med' },
-                      { level: 3, label: '3x Lock' }
-                    ].map(({ level, label }) => {
-                      const isSelected = confidenceLevels[item.gameId] === level;
-                      return (
+                    {!isLocked ? (
+                      <div className="flex items-center space-x-1.5">
                         <button
-                          key={level}
-                          onClick={() => handleConfidence(item.gameId, level, item)}
-                          className={`flex items-center space-x-1 px-3 py-1.5 rounded-xl text-[11px] font-black border transition ${
-                            isSelected
-                              ? 'bg-amber-500 text-black border-amber-400 shadow-md shadow-amber-500/20 scale-105'
+                          type="button"
+                          onClick={() => handleToggleOverUnder(item.gameId, 'OVER', item)}
+                          className={`px-3 py-1 rounded-xl text-[11px] font-black border transition cursor-pointer ${
+                            overUnderPicks[item.gameId] === 'OVER'
+                              ? 'bg-amber-500 text-black border-amber-400 shadow-md shadow-amber-500/20 scale-105 ring-1 ring-amber-300'
                               : 'bg-black/50 text-[#dcd8c8] border-white/10 hover:border-amber-400/40 hover:bg-black/80'
                           }`}
-                          title={`Set confidence: ${label}`}
                         >
-                          <span>{label}</span>
+                          OVER {odds.overUnder || 52.5}
                         </button>
-                      );
-                    })}
-                    {confidenceLevels[item.gameId] && (
-                      <span className="text-[10px] text-amber-400 font-bold ml-1">
-                        {confidenceLevels[item.gameId] === 3 ? '3x Lock Pick (+30 / -30 PTS)' : confidenceLevels[item.gameId] === 2 ? '2x Med Confidence (+20 / -20 PTS)' : '1x Low Confidence (+10 / -10 PTS)'}
-                      </span>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleOverUnder(item.gameId, 'UNDER', item)}
+                          className={`px-3 py-1 rounded-xl text-[11px] font-black border transition cursor-pointer ${
+                            overUnderPicks[item.gameId] === 'UNDER'
+                              ? 'bg-amber-500 text-black border-amber-400 shadow-md shadow-amber-500/20 scale-105 ring-1 ring-amber-300'
+                              : 'bg-black/50 text-[#dcd8c8] border-white/10 hover:border-amber-400/40 hover:bg-black/80'
+                          }`}
+                        >
+                          UNDER {odds.overUnder || 52.5}
+                        </button>
+                        <span className="text-[10px] font-extrabold text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                          +10 Bonus PTS (0 Penalty)
+                        </span>
+                      </div>
+                    ) : (
+                      overUnderPicks[item.gameId] && (
+                        <span className="text-[11px] font-black px-2.5 py-0.5 rounded bg-black/60 text-amber-400 border border-white/10">
+                          Picked {overUnderPicks[item.gameId]} {odds.overUnder || 52.5}
+                        </span>
+                      )
                     )}
                   </div>
-                )}
+
+                  {/* Right: Confidence Selector (when winner is picked and not locked) */}
+                  {(isWin || isLoss) && !isLocked && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] font-black uppercase text-[#9a978a] tracking-wider mr-1">
+                        Confidence:
+                      </span>
+                      {[
+                        { level: 1, label: '1x Low' },
+                        { level: 2, label: '2x Med' },
+                        { level: 3, label: '3x Lock' }
+                      ].map(({ level, label }) => {
+                        const isSelected = confidenceLevels[item.gameId] === level;
+                        return (
+                          <button
+                            key={level}
+                            type="button"
+                            onClick={() => handleConfidence(item.gameId, level, item)}
+                            className={`flex items-center space-x-1 px-2.5 py-1 rounded-xl text-[11px] font-black border transition cursor-pointer ${
+                              isSelected
+                                ? 'bg-amber-500 text-black border-amber-400 shadow-md shadow-amber-500/20 scale-105'
+                                : 'bg-black/50 text-[#dcd8c8] border-white/10 hover:border-amber-400/40 hover:bg-black/80'
+                            }`}
+                            title={`Set confidence: ${label}`}
+                          >
+                            <span>{label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}

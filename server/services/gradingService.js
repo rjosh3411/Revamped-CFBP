@@ -121,8 +121,18 @@ class GradingService {
     const gameMap = new Map();
     for (const g of finalGames) {
       let winningTeam = null;
+      let totalScore = null;
 
-      if (g.winnerId) {
+      if (g.homeTeam && g.awayTeam && g.homeTeam.score !== undefined && g.awayTeam.score !== undefined) {
+        const hScore = parseInt(g.homeTeam.score || 0, 10);
+        const aScore = parseInt(g.awayTeam.score || 0, 10);
+        totalScore = hScore + aScore;
+        if (hScore > aScore) {
+          winningTeam = g.homeTeam;
+        } else if (aScore > hScore) {
+          winningTeam = g.awayTeam;
+        }
+      } else if (g.winnerId) {
         if (g.homeTeam && (g.homeTeam.id === g.winnerId || g.homeTeam.espnId === g.winnerId)) {
           winningTeam = g.homeTeam;
         } else if (g.awayTeam && (g.awayTeam.id === g.winnerId || g.awayTeam.espnId === g.winnerId)) {
@@ -130,18 +140,10 @@ class GradingService {
         } else {
           winningTeam = { id: g.winnerId, name: g.winnerId };
         }
-      } else if (g.homeTeam && g.awayTeam && g.homeTeam.score !== undefined && g.awayTeam.score !== undefined) {
-        const hScore = parseInt(g.homeTeam.score || 0, 10);
-        const aScore = parseInt(g.awayTeam.score || 0, 10);
-        if (hScore > aScore) {
-          winningTeam = g.homeTeam;
-        } else if (aScore > hScore) {
-          winningTeam = g.awayTeam;
-        }
       }
 
-      if (winningTeam) {
-        gameMap.set(g.id, winningTeam);
+      if (winningTeam || totalScore !== null) {
+        gameMap.set(g.id, { winningTeam, totalScore });
       }
     }
 
@@ -179,23 +181,50 @@ class GradingService {
     const affectedUserIds = new Set();
 
     for (const pick of picksToGrade) {
-      const winningTeam = gameMap.get(pick.game_id);
-      if (!winningTeam) continue;
+      const gameData = gameMap.get(pick.game_id);
+      if (!gameData) continue;
+      const { winningTeam, totalScore } = gameData;
 
-      const isCorrect = isPickWinnerMatch(pick, winningTeam) ? 1 : 0;
-      const confLevel = pick.confidence_level || pick.confidence_points || 1;
-      const confPoints = confLevel * 10;
+      let isCorrect = pick.is_correct;
+      let confPoints = (pick.confidence_level || pick.confidence_points || 1) * 10;
+      let winnerPoints = 0;
 
-      // Dynamic confidence scoring: Positive points if correct, Negative penalty if incorrect!
-      const pointsAwarded = isCorrect === 1 ? confPoints : -confPoints;
+      if (winningTeam && (pick.predicted_winner_id || pick.predicted_winner_name)) {
+        isCorrect = isPickWinnerMatch(pick, winningTeam) ? 1 : 0;
+        winnerPoints = isCorrect === 1 ? confPoints : -confPoints;
+      }
+
+      let isOuCorrect = pick.is_ou_correct;
+      let ouPointsAwarded = pick.ou_points_awarded || 0;
+
+      if (totalScore !== null && pick.over_under_pick && pick.over_under_line !== null && pick.over_under_line !== undefined) {
+        const line = parseFloat(pick.over_under_line);
+        if (!isNaN(line)) {
+          if (totalScore > line) {
+            isOuCorrect = pick.over_under_pick === 'OVER' ? 1 : 0;
+          } else if (totalScore < line) {
+            isOuCorrect = pick.over_under_pick === 'UNDER' ? 1 : 0;
+          } else {
+            isOuCorrect = null; // Push
+          }
+          ouPointsAwarded = isOuCorrect === 1 ? 10 : 0; // +10 Bonus PTS, 0 penalty
+        }
+      }
+
+      const pointsAwarded = winnerPoints + ouPointsAwarded;
 
       // Only update if grade or points changed
-      if (pick.is_correct !== isCorrect || pick.points_awarded !== pointsAwarded) {
+      if (
+        pick.is_correct !== isCorrect || 
+        pick.points_awarded !== pointsAwarded ||
+        pick.is_ou_correct !== isOuCorrect ||
+        pick.ou_points_awarded !== ouPointsAwarded
+      ) {
         await db.prepare(`
           UPDATE picks 
-          SET is_correct = ?, points_awarded = ?, updated_at = CURRENT_TIMESTAMP
+          SET is_correct = ?, points_awarded = ?, is_ou_correct = ?, ou_points_awarded = ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).run(isCorrect, pointsAwarded, pick.id);
+        `).run(isCorrect, pointsAwarded, isOuCorrect, ouPointsAwarded, pick.id);
 
         affectedUserIds.add(pick.user_id);
         gradedCount++;
@@ -300,11 +329,11 @@ class GradingService {
   }
 
   /**
-   * Retroactively updates all previously graded picks to apply negative confidence deductions.
+   * Retroactively updates all previously graded picks to apply negative confidence deductions and Over/Under bonuses.
    */
   async regradeAllExistingPicks() {
     const gradedPicks = await db.prepare(`
-      SELECT * FROM picks WHERE is_correct IS NOT NULL
+      SELECT * FROM picks WHERE is_correct IS NOT NULL OR is_ou_correct IS NOT NULL
     `).all();
 
     const affectedUserIds = new Set();
@@ -312,7 +341,9 @@ class GradingService {
     for (const pick of gradedPicks) {
       const confLevel = pick.confidence_level || pick.confidence_points || 1;
       const confPoints = confLevel * 10;
-      const expectedPoints = pick.is_correct === 1 ? confPoints : -confPoints;
+      const winnerPoints = pick.is_correct !== null ? (pick.is_correct === 1 ? confPoints : -confPoints) : 0;
+      const ouPoints = pick.ou_points_awarded || (pick.is_ou_correct === 1 ? 10 : 0);
+      const expectedPoints = winnerPoints + ouPoints;
 
       if (pick.points_awarded !== expectedPoints) {
         await db.prepare(`
