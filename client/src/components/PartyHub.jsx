@@ -251,74 +251,109 @@ export function PartyHub({ parties, onPartyCreated, onPartyJoined, onPartyLeft, 
         </div>
       </div>
 
-      {/* Parties Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {parties.map(p => {
-          const isSelected = p.id === selectedPartyId;
-          const scoringPreset = SCORING_PRESETS.find(s => s.id === p.scoring_type) || SCORING_PRESETS[0];
+      {/* Empty State when no parties */}
+      {(!parties || parties.length === 0) ? (
+        <div className="bg-[#0e1218] border border-white/10 rounded-3xl p-8 sm:p-12 text-center shadow-2xl max-w-xl mx-auto space-y-6">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-3xl mx-auto shadow-inner">
+            🏆
+          </div>
+          <div>
+            <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-wide athletic-title">
+              No Prediction Parties Yet
+            </h2>
+            <p className="text-xs sm:text-sm text-[#9a978a] max-w-md mx-auto mt-2 leading-relaxed">
+              Create your own custom pick'em party to invite friends, or enter an invite code to join an existing league!
+            </p>
+          </div>
 
-          return (
-            <div
-              key={p.id}
-              onClick={() => setSelectedPartyId(p.id)}
-              className={`cursor-pointer rounded-2xl p-4 border transition-all duration-200 relative overflow-hidden ${
-                isSelected
-                  ? 'bg-[#141b24] border-amber-400 ring-2 ring-amber-400/40 shadow-xl shadow-amber-500/10'
-                  : 'bg-[#0e1218] hover:bg-[#12161f] border-white/5 hover:border-white/15'
-              }`}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            <button
+              onClick={() => { setFormError(''); setCreateModalOpen(true); }}
+              className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider transition flex items-center justify-center space-x-2 shadow-lg shadow-amber-500/20 active:scale-95 cursor-pointer"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-xl bg-black/60 border border-white/10 flex items-center justify-center text-xl shadow-inner">
-                    {p.icon || '🏈'}
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-extrabold text-white athletic-title line-clamp-1">{p.name}</h3>
-                    <div className="text-[11px] text-[#9a978a] flex items-center space-x-2 mt-0.5">
-                      <span>{p.member_count || 1} Members</span>
-                      <span>•</span>
-                      <span className="text-amber-400 font-bold uppercase text-[10px]">{p.conference_focus || 'ALL'}</span>
+              <Plus className="w-4 h-4" />
+              <span>Create New Party</span>
+            </button>
+
+            <button
+              onClick={() => { setFormError(''); setJoinModalOpen(true); }}
+              className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-black/60 hover:bg-black text-[#faf6e8] font-bold text-xs uppercase tracking-wider transition border border-white/10 flex items-center justify-center space-x-2 cursor-pointer"
+            >
+              <Users className="w-4 h-4 text-amber-400" />
+              <span>Join With Code</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* Parties Cards Grid */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {parties.map(p => {
+            const isSelected = p.id === selectedPartyId;
+            const scoringPreset = SCORING_PRESETS.find(s => s.id === p.scoring_type) || SCORING_PRESETS[0];
+
+            return (
+              <div
+                key={p.id}
+                onClick={() => setSelectedPartyId(p.id)}
+                className={`cursor-pointer rounded-2xl p-4 border transition-all duration-200 relative overflow-hidden ${
+                  isSelected
+                    ? 'bg-[#141b24] border-amber-400 ring-2 ring-amber-400/40 shadow-xl shadow-amber-500/10'
+                    : 'bg-[#0e1218] hover:bg-[#12161f] border-white/5 hover:border-white/15'
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 rounded-xl bg-black/60 border border-white/10 flex items-center justify-center text-xl shadow-inner">
+                      {p.icon || '🏈'}
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-extrabold text-white athletic-title line-clamp-1">{p.name}</h3>
+                      <div className="text-[11px] text-[#9a978a] flex items-center space-x-2 mt-0.5">
+                        <span>{p.member_count || 1} Members</span>
+                        <span>•</span>
+                        <span className="text-amber-400 font-bold uppercase text-[10px]">{p.conference_focus || 'ALL'}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex flex-col items-end space-y-1">
-                  {isSelected && (
-                    <span className="text-[9px] font-black text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.2 rounded-full">
-                      ACTIVE
+                  <div className="flex flex-col items-end space-y-1">
+                    {isSelected && (
+                      <span className="text-[9px] font-black text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.2 rounded-full">
+                        ACTIVE
+                      </span>
+                    )}
+                    <span className="text-[9px] font-bold text-[#86efac] bg-[#86efac]/10 px-1.5 py-0.2 rounded border border-[#86efac]/20 font-mono">
+                      {scoringPreset.name.split(' ')[0]}
                     </span>
-                  )}
-                  <span className="text-[9px] font-bold text-[#86efac] bg-[#86efac]/10 px-1.5 py-0.2 rounded border border-[#86efac]/20 font-mono">
-                    {scoringPreset.name.split(' ')[0]}
-                  </span>
-                </div>
-              </div>
-
-              {/* Code and Copy */}
-              <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between text-xs">
-                <div className="flex items-center space-x-1.5 text-[#9a978a]">
-                  <span className="text-[10px] uppercase font-bold">Code:</span>
-                  <span className="font-mono font-bold text-white bg-black/60 px-2 py-0.5 rounded text-[11px] border border-white/10">
-                    {p.invite_code}
-                  </span>
+                  </div>
                 </div>
 
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCopyCode(p.invite_code);
-                  }}
-                  className="text-[#9a978a] hover:text-amber-400 text-xs flex items-center space-x-1 transition"
-                  title="Copy Invite Code"
-                >
-                  <Copy className="w-3 h-3" />
-                  <span>Copy</span>
-                </button>
+                {/* Code and Copy */}
+                <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between text-xs">
+                  <div className="flex items-center space-x-1.5 text-[#9a978a]">
+                    <span className="text-[10px] uppercase font-bold">Code:</span>
+                    <span className="font-mono font-bold text-white bg-black/60 px-2 py-0.5 rounded text-[11px] border border-white/10">
+                      {p.invite_code}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCopyCode(p.invite_code);
+                    }}
+                    className="text-[#9a978a] hover:text-amber-400 text-xs flex items-center space-x-1 transition cursor-pointer"
+                    title="Copy Invite Code"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>Copy</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Selected Party Dashboard */}
       {currentParty && (

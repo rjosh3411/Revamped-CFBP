@@ -18,7 +18,7 @@ module.exports = (req, res) => {
   }
   return app(req, res);
 };
-// Vercel redeploy Tue Sep  8 17:10:00 EDT 2026 - Over/Under Total Score Bonus (+10 PTS) feature added
+// Vercel redeploy Tue Sep  8 19:52:00 EDT 2026 - Remove default party auto-enrollment on user registration
 
 
 

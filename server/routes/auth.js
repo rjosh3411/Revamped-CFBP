@@ -29,16 +29,6 @@ router.post('/register', async (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(userId, email.toLowerCase(), username.toLowerCase(), passwordHash, finalDisplayName, favoriteTeam, jerseyNumber);
 
-    // Auto-enroll into the default public "All-American Pick'em League"
-    const defaultParty = await db.prepare('SELECT id FROM parties WHERE id = ?').get('pty_all_american');
-    if (defaultParty) {
-      const memberId = 'pm_' + crypto.randomBytes(6).toString('hex');
-      await db.prepare(`
-        INSERT INTO party_members (id, party_id, user_id, role)
-        VALUES (?, ?, ?, 'member')
-      `).run(memberId, defaultParty.id, userId);
-    }
-
     const newUser = await db.prepare('SELECT id, email, username, display_name, favorite_team, avatar_url, jersey_number, total_points, correct_picks, total_picks, current_streak, best_streak FROM users WHERE id = ?').get(userId);
     const token = generateToken(newUser);
 
