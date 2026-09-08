@@ -669,12 +669,11 @@ class EspnService {
   }
 
   async getRankings({ forceRefresh = false } = {}) {
-    const cacheKey = 'cfb_rankings';
+    const cacheKey = 'cfb_rankings_v2';
     const cached = this.memoryCache.get(cacheKey);
 
-    // Dynamic cache expiration: 10 minutes on Mondays when AP releases, 30 mins otherwise
-    const dayOfWeek = new Date().getDay(); // 1 = Monday
-    const cacheDuration = dayOfWeek === 1 ? (10 * 60 * 1000) : (30 * 60 * 1000);
+    // Refresh dynamically from ESPN every 5 minutes so weekly releases update automatically
+    const cacheDuration = 5 * 60 * 1000;
 
     if (!forceRefresh && cached && (Date.now() - cached.timestamp < cacheDuration)) {
       return cached.data;
@@ -707,10 +706,20 @@ class EspnService {
     const apPoll = polls.find(p => p.name?.includes('AP') || p.type === 'ap') || polls[0];
     if (!apPoll || !apPoll.ranks) return;
 
+    // Reset all rankings first
+    for (const t of TEAMS_2026) {
+      t.ranking = null;
+    }
+
     for (const r of apPoll.ranks) {
-      const teamId = r.team?.id;
-      const teamName = (r.team?.displayName || r.team?.name || '').toLowerCase();
-      const match = TEAMS_2026.find(t => t.id === teamId || t.name.toLowerCase().includes(teamName) || teamName.includes(t.name.toLowerCase()));
+      const espnId = String(r.team?.espnId || r.team?.id || '');
+      const teamId = (r.team?.id || '').toLowerCase();
+      const teamName = (r.team?.name || r.team?.displayName || '').toLowerCase();
+      const match = TEAMS_2026.find(t => 
+        (espnId && String(t.espnId) === espnId) || 
+        t.id.toLowerCase() === teamId || 
+        t.name.toLowerCase() === teamName
+      );
       if (match) {
         match.ranking = r.rank;
       }
@@ -920,8 +929,23 @@ class EspnService {
       name: poll.name || 'AP Top 25',
       type: poll.type || 'ap',
       headline: poll.headline || 'NCAA Football Rankings',
+      date: poll.date || new Date().toISOString(),
       ranks: (poll.ranks || []).map(r => {
         const team = r.team || {};
+        const espnId = String(team.id || '');
+        const location = team.location || team.name || '';
+        const nickname = team.nickname || (team.location ? team.name : '') || '';
+        const fullLocationName = location && nickname && location !== nickname ? `${location} ${nickname}`.trim() : (location || nickname || team.displayName || 'Team');
+
+        // Match canonical team in TEAMS_2026
+        const canonical = TEAMS_2026.find(t => 
+          (espnId && String(t.espnId) === espnId) || 
+          t.id.toLowerCase() === location.toLowerCase() ||
+          t.name.toLowerCase() === location.toLowerCase() ||
+          t.name.toLowerCase() === fullLocationName.toLowerCase() ||
+          (t.nickname && t.nickname.toLowerCase() === nickname.toLowerCase() && t.conference !== 'Group of 5')
+        );
+
         let changeText = '0';
         let changeType = 'none';
         if (r.trend && r.trend !== '-') {
@@ -934,6 +958,13 @@ class EspnService {
           changeType = diff > 0 ? 'up' : 'down';
         }
 
+        const teamName = canonical ? canonical.name : location;
+        const teamNickname = canonical ? (canonical.nickname || nickname) : nickname;
+        const teamDisplayName = canonical ? canonical.name : fullLocationName;
+        const teamId = canonical ? canonical.id : (team.id || location.toLowerCase().replace(/[^a-z0-9]/g, '-'));
+        const teamLogo = canonical?.logoUrl || team.logo || (espnId ? `https://a.espncdn.com/i/teamlogos/ncaa/500/${espnId}.png` : 'https://a.espncdn.com/i/teamlogos/ncaa/500/7.png');
+        const teamColor = canonical?.colors?.primary || (team.color ? `#${team.color}` : '#1e3a8a');
+
         return {
           rank: r.current,
           previousRank: r.previous || r.current,
@@ -943,13 +974,15 @@ class EspnService {
           firstPlaceVotes: r.firstPlaceVotes || 0,
           record: r.recordSummary || '0-0',
           team: {
-            id: team.id,
-            name: team.name || team.nickname,
-            nickname: team.nickname || team.name,
-            displayName: team.displayName || team.name,
-            abbreviation: team.abbreviation || '',
-            color: team.color ? `#${team.color}` : '#1e3a8a',
-            logo: team.logo || `https://a.espncdn.com/i/teamlogos/ncaa/500/${team.id}.png`
+            id: teamId,
+            espnId: espnId,
+            name: teamName,
+            nickname: teamNickname,
+            displayName: teamDisplayName,
+            abbreviation: team.abbreviation || canonical?.abbreviation || '',
+            color: teamColor,
+            logo: teamLogo,
+            conference: canonical?.conference || 'FBS'
           }
         };
       })

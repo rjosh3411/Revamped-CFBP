@@ -18,7 +18,8 @@ module.exports = (req, res) => {
   }
   return app(req, res);
 };
-// Vercel redeploy Tue Sep  8 16:10:00 EDT 2026 - Week 1 Completed Sync, User Points Grading, Week 2 Records & New AP Poll
+// Vercel redeploy Tue Sep  8 17:00:00 EDT 2026 - Official ESPN AP Top 25 live sync & continuous weekly polling
+
 
 
 
