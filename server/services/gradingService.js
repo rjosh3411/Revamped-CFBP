@@ -214,14 +214,38 @@ class GradingService {
   }
 
   /**
-   * Syncs latest ESPN live scoreboard and automatically grades all completed games.
+   * Syncs latest ESPN live scoreboard and completed weeks, automatically grading all completed games.
    */
   async syncAndGradeLiveScores() {
     try {
       const espnService = require('./espnService');
-      const live = await espnService.getLiveScoreboard();
-      if (live && live.games && live.games.length > 0) {
-        return await this.gradeFinishedGames(live.games);
+      const weeksToSync = [0, 1, 2];
+      let allGames = [];
+
+      for (const w of weeksToSync) {
+        try {
+          const url = `https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?dates=2026&seasontype=2&week=${w}&groups=80&limit=150`;
+          const data = await espnService.fetchJson(url);
+          if (data && data.events && Array.isArray(data.events)) {
+            const normalized = espnService.normalizeScoreboard(data, 2026, w);
+            allGames.push(...normalized);
+          }
+        } catch (e) {
+          // non-blocking
+        }
+      }
+
+      // Also fetch live scoreboard for real-time in-progress games
+      try {
+        const live = await espnService.getLiveScoreboard();
+        if (live && live.games && live.games.length > 0) {
+          allGames.push(...live.games);
+        }
+      } catch (e) {}
+
+      if (allGames.length > 0) {
+        await espnService.saveGamesToDb(allGames, 2026, 1);
+        return await this.gradeFinishedGames(allGames);
       }
     } catch (err) {
       console.warn('Live score sync warning:', err.message);

@@ -58,6 +58,15 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
 });
 
+const gradingService = require('./services/gradingService');
+const espnService = require('./services/espnService');
+
+// Non-blocking background sync on startup
+setTimeout(() => {
+  gradingService.syncAndGradeLiveScores().catch(e => console.warn('Background grading sync warning:', e.message));
+  espnService.getRankings({ forceRefresh: true }).catch(e => console.warn('Background rankings sync warning:', e.message));
+}, 1000);
+
 // Only start listening if NOT running in a serverless environment like Vercel and executed directly
 if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME && !process.env.LAMBDA_TASK_ROOT && require.main === module) {
   app.listen(PORT, '0.0.0.0', () => {
