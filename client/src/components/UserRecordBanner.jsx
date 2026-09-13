@@ -38,7 +38,10 @@ export function UserRecordBanner({ onWeekSelect, activeWeek = 1, refreshTrigger 
   const bestStreak = stats?.bestStreak !== undefined ? stats.bestStreak : (user?.best_streak || 0);
   const lockAccuracy = stats?.lockStats?.accuracy;
   const lockCorrect = stats?.lockStats?.correct || 0;
-  const lockTotal = stats?.lockStats?.total || 0;
+  const ouPoints = stats?.overUnderStats?.pointsAwarded || 0;
+  const ouCorrect = stats?.overUnderStats?.correct || 0;
+  const ouTotal = stats?.overUnderStats?.total || 0;
+  const ouAccuracy = stats?.overUnderStats?.accuracy;
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
@@ -49,31 +52,42 @@ export function UserRecordBanner({ onWeekSelect, activeWeek = 1, refreshTrigger 
 
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           {/* Left Title & Identity */}
-          <div className="flex items-center space-x-3.5">
-            <div className="relative">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/40 flex items-center justify-center text-2xl sm:text-3xl shadow-lg shadow-amber-500/10 font-black text-amber-300">
-                🏈
+          <div className="flex items-center justify-between lg:justify-start space-x-3.5">
+            <div className="flex items-center space-x-3.5">
+              <div className="relative">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/40 flex items-center justify-center text-2xl sm:text-3xl shadow-lg shadow-amber-500/10 font-black text-amber-300">
+                  🏈
+                </div>
+                {currentStreak >= 3 && (
+                  <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[10px] font-black text-black ring-2 ring-black animate-pulse">
+                    🔥
+                  </span>
+                )}
               </div>
-              {currentStreak >= 3 && (
-                <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[10px] font-black text-black ring-2 ring-black animate-pulse">
-                  🔥
-                </span>
-              )}
-            </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="text-[11px] font-black uppercase tracking-widest text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-                  2026 Season Performance
-                </span>
-                <span className="text-xs text-white/40 hidden sm:inline">|</span>
-                <span className="text-xs font-semibold text-white/60 hidden sm:inline">
-                  {user.display_name || user.username} (#{user.jersey_number || '7'})
-                </span>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                    2026 Season Performance
+                  </span>
+                  <span className="text-xs text-white/40 hidden sm:inline">|</span>
+                  <span className="text-xs font-semibold text-white/60 hidden sm:inline">
+                    {user.display_name || user.username} (#{user.jersey_number || '7'})
+                  </span>
+                </div>
+                <h2 className="text-lg sm:text-xl font-black text-white tracking-tight flex items-center space-x-2 mt-0.5">
+                  <span>My Official Pick Record</span>
+                </h2>
               </div>
-              <h2 className="text-lg sm:text-xl font-black text-white tracking-tight flex items-center space-x-2 mt-0.5">
-                <span>My Official Pick Record</span>
-              </h2>
             </div>
+
+            <button
+              onClick={() => { setLoading(true); loadStats(); }}
+              disabled={loading}
+              className="p-2 rounded-xl bg-black/40 hover:bg-black/80 border border-white/10 text-white/60 hover:text-amber-400 transition lg:hidden"
+              title="Refresh Stats"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-400' : ''}`} />
+            </button>
           </div>
 
           {/* Right Athletic Stat Cards Grid */}
@@ -110,9 +124,15 @@ export function UserRecordBanner({ onWeekSelect, activeWeek = 1, refreshTrigger 
                   <Trophy className="w-3.5 h-3.5 text-amber-400" />
                   <span>TOTAL PTS</span>
                 </span>
-                <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300">
-                  CONFIDENCE
-                </span>
+                {ouPoints > 0 ? (
+                  <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    +{ouPoints} O/U
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300">
+                    CONFIDENCE
+                  </span>
+                )}
               </div>
               <div className="flex items-baseline space-x-1">
                 <span className="text-xl sm:text-2xl font-black text-amber-300 tracking-tight">

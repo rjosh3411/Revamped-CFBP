@@ -82,18 +82,36 @@ router.get('/my-stats', authenticateToken, async (req, res) => {
     const mediumStats = getStarStats(2); // 2-Star
     const regularStats = getStarStats(1); // 1-Star
 
+    // Over/Under stats breakdown
+    const ouPicks = picks.filter(p => p.over_under_pick);
+    const ouGraded = ouPicks.filter(p => p.is_ou_correct !== null);
+    const ouCorrect = ouGraded.filter(p => p.is_ou_correct === 1).length;
+    const ouLosses = ouGraded.filter(p => p.is_ou_correct === 0).length;
+    const ouPoints = picks.reduce((sum, p) => sum + (p.ou_points_awarded || 0), 0);
+    const ouAccuracy = ouGraded.length > 0 ? ((ouCorrect / ouGraded.length) * 100).toFixed(0) : null;
+    const overUnderStats = {
+      total: ouPicks.length,
+      graded: ouGraded.length,
+      correct: ouCorrect,
+      losses: ouLosses,
+      pointsAwarded: ouPoints,
+      accuracy: ouAccuracy
+    };
+
     // Week by week summary
     const weekMap = {};
     for (const p of picks) {
       const w = p.week_number || 1;
       if (!weekMap[w]) {
-        weekMap[w] = { week: w, totalPicks: 0, graded: 0, correct: 0, losses: 0, pending: 0, points: 0 };
+        weekMap[w] = { week: w, totalPicks: 0, graded: 0, correct: 0, losses: 0, pending: 0, points: 0, ouPoints: 0 };
       }
       weekMap[w].totalPicks++;
+      weekMap[w].points += (p.points_awarded || 0);
+      weekMap[w].ouPoints += (p.ou_points_awarded || 0);
+
       if (p.is_correct === 1) {
         weekMap[w].graded++;
         weekMap[w].correct++;
-        weekMap[w].points += (p.points_awarded || 0);
       } else if (p.is_correct === 0) {
         weekMap[w].graded++;
         weekMap[w].losses++;
@@ -127,6 +145,7 @@ router.get('/my-stats', authenticateToken, async (req, res) => {
         lockStats,
         mediumStats,
         regularStats,
+        overUnderStats,
         weeks
       }
     });

@@ -607,7 +607,7 @@ class EspnService {
           last_synced = CURRENT_TIMESTAMP
       `,
       args: [
-        g.id, year, week, g.date, g.status, g.statusDetail,
+        g.id, year, (g.weekNumber !== undefined && g.weekNumber !== null ? g.weekNumber : (week || 1)), g.date, g.status, g.statusDetail,
         g.homeTeam.id, g.homeTeam.name, g.homeTeam.rank, g.homeTeam.logo, g.homeTeam.score,
         g.awayTeam.id, g.awayTeam.name, g.awayTeam.rank, g.awayTeam.logo, g.awayTeam.score,
         g.winnerId, g.conferenceCompetition ? 1 : 0, g.venue, g.broadcast, JSON.stringify(g)

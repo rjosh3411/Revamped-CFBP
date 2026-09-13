@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { TeamScheduleView } from './TeamScheduleView';
 import { CoverflowWeekSelector } from './CoverflowWeekSelector';
 import { GameCard } from './GameCard';
+import { UserRecordBanner } from './UserRecordBanner';
 import { 
   Shield, Calendar, Sparkles, ChevronRight, 
   Award, Flame, CheckCircle2, Layers, Filter 
@@ -78,6 +79,7 @@ export function MakePicksView() {
   const [teams, setTeams] = useState([]);
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [loadingTeams, setLoadingTeams] = useState(false);
+  const [statsRefreshKey, setStatsRefreshKey] = useState(0);
 
   useEffect(() => {
     if (pickMode === 'WEEK') {
@@ -272,8 +274,11 @@ export function MakePicksView() {
         predictedWinnerId: pickData.predictedWinnerId,
         predictedWinnerName: pickData.predictedWinnerName,
         confidencePoints: pickData.confidencePoints || 1,
-        confidenceLevel: pickData.confidenceLevel || pickData.confidencePoints || 1
+        confidenceLevel: pickData.confidenceLevel || pickData.confidencePoints || 1,
+        overUnderPick: pickData.overUnderPick,
+        overUnderLine: pickData.overUnderLine
       });
+      setStatsRefreshKey(k => k + 1);
     } catch (err) {
       console.error('Failed to save pick:', err);
     } finally {
@@ -284,21 +289,28 @@ export function MakePicksView() {
   // If a team is selected in Team Mode, show their full 2026 schedule view
   if (pickMode === 'TEAM' && selectedTeam) {
     return (
-      <TeamScheduleView
-        team={selectedTeam}
-        onBack={() => {
-          setSelectedTeam(null);
-          loadTeams();
-        }}
-        onPickChanged={() => {
-          loadTeams();
-        }}
-      />
+      <div className="space-y-4">
+        <UserRecordBanner refreshTrigger={statsRefreshKey} activeWeek={selectedWeek} />
+        <TeamScheduleView
+          team={selectedTeam}
+          onBack={() => {
+            setSelectedTeam(null);
+            loadTeams();
+          }}
+          onPickChanged={() => {
+            loadTeams();
+            setStatsRefreshKey(k => k + 1);
+          }}
+        />
+      </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      {/* Official Live User Record & Performance Banner */}
+      <UserRecordBanner refreshTrigger={statsRefreshKey} activeWeek={selectedWeek} />
+
       {/* Top Dual Mode Switcher Bar */}
       <div className="bg-[#0e1218] border border-white/10 rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
         <div>

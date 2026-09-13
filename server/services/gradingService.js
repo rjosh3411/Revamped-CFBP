@@ -248,7 +248,7 @@ class GradingService {
   async syncAndGradeLiveScores() {
     try {
       const espnService = require('./espnService');
-      const weeksToSync = [0, 1, 2];
+      const weeksToSync = [0, 1, 2, 3];
       let allGames = [];
 
       for (const w of weeksToSync) {
@@ -273,7 +273,7 @@ class GradingService {
       } catch (e) {}
 
       if (allGames.length > 0) {
-        await espnService.saveGamesToDb(allGames, 2026, 1);
+        await espnService.saveGamesToDb(allGames, 2026, 2);
         return await this.gradeFinishedGames(allGames);
       }
     } catch (err) {
