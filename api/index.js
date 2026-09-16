@@ -18,7 +18,7 @@ module.exports = (req, res) => {
   }
   return app(req, res);
 };
-// Vercel redeploy Sat Sep 12 23:44:00 EDT 2026 - Real-time user predictions performance stats banner & continuous week grading sync
+// Vercel redeploy Wed Sep 16 19:40:00 EDT 2026 - Dynamic week selection, 401 token cleanup, and 1-tap instant demo access
 
 
 

@@ -21,6 +21,9 @@ async function request(endpoint, options = {}) {
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('cfb_jwt_token');
+    }
     throw new Error(data.error || `HTTP error ${response.status}`);
   }
 

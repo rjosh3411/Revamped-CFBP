@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
+import { getCurrentSeasonWeek } from '../utils/weekHelper';
 
 function cleanTeamName(name, abbr) {
   if (!name) return abbr || 'Team';
@@ -169,9 +170,11 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
         }
       }
 
-      // 3. Tertiary: Fallback to standard 2026 week 1 games
+      const curW = getCurrentSeasonWeek();
+
+      // 3. Tertiary: Fallback to standard 2026 current week games
       if (rawEvents.length === 0) {
-        const gamesData = await api.getGames({ year: 2026, week: 1 });
+        const gamesData = await api.getGames({ year: 2026, week: curW });
         rawEvents = gamesData?.games || [];
       }
 
@@ -179,7 +182,7 @@ export function LiveScoreboardRibbon({ onSelectGame }) {
       let userPicksData = [];
       if (user) {
         try {
-          const picksRes = await api.getMyPicks({ year: 2026, week: 1 });
+          const picksRes = await api.getMyPicks({ year: 2026, week: curW });
           userPicksData = picksRes?.picks || [];
         } catch {
           userPicksData = [];

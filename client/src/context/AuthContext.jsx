@@ -93,6 +93,8 @@ export function AuthProvider({ children }) {
       if (res?.token && res?.user) {
         localStorage.setItem('cfb_jwt_token', res.token);
         setUser(res.user);
+        setAuthModalOpen(false);
+        return res.user;
       }
     } catch (err) {
       console.error('Failed to switch demo user:', err);

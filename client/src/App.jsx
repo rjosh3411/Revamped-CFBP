@@ -8,6 +8,7 @@ import { BuddyComparison } from './components/BuddyComparison';
 import { StandingsView } from './components/StandingsView';
 import { PartyHub } from './components/PartyHub';
 import { AuthModal } from './components/AuthModal';
+import { getCurrentSeasonWeek } from './utils/weekHelper';
 import { 
   Trophy, CheckCircle2, AlertCircle, RefreshCw, 
   Flame, Sparkles, Shield, Users, ArrowRight, Zap 
@@ -18,7 +19,7 @@ export function App() {
 
   // Navigation & Filtering (4 core tabs: 'picks', 'compare', 'standings', 'parties')
   const [activeTab, setActiveTab] = useState('picks');
-  const [currentWeek, setCurrentWeek] = useState(1);
+  const [currentWeek, setCurrentWeek] = useState(getCurrentSeasonWeek());
   const [parties, setParties] = useState([]);
   const [selectedPartyCode, setSelectedPartyCode] = useState('');
   const [toast, setToast] = useState(null);

@@ -61,6 +61,8 @@ const G5_TEAMS = new Set([
   'notre-dame', 'uconn', 'umass', 'oregon-state', 'washington-state'
 ]);
 
+import { getCurrentSeasonWeek } from '../utils/weekHelper';
+
 export function MakePicksView() {
   const { user } = useAuth();
   
@@ -68,7 +70,7 @@ export function MakePicksView() {
   const [pickMode, setPickMode] = useState('WEEK');
   
   // Week Mode State
-  const [selectedWeek, setSelectedWeek] = useState(0);
+  const [selectedWeek, setSelectedWeek] = useState(getCurrentSeasonWeek());
   const [weekConference, setWeekConference] = useState('ALL');
   const [weeklyGames, setWeeklyGames] = useState([]);
   const [loadingGames, setLoadingGames] = useState(false);

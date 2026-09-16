@@ -30,7 +30,7 @@ const POPULAR_TEAMS = [
 ];
 
 export function AuthModal() {
-  const { user, authModalOpen, authMode, closeAuth, login, register, openAuth } = useAuth();
+  const { user, authModalOpen, authMode, closeAuth, login, register, demoUsers, switchDemo } = useAuth();
 
   const [mode, setMode] = useState(authMode || 'login');
   const [email, setEmail] = useState('');
@@ -72,9 +72,22 @@ export function AuthModal() {
     }
   };
 
+  const handleDemoClick = async (demoId) => {
+    setError('');
+    setSubmitting(true);
+    try {
+      await switchDemo(demoId);
+      confetti({ particleCount: 40, spread: 60, origin: { y: 0.6 } });
+    } catch (err) {
+      setError('Failed to log in as demo profile');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
-      <div className="bg-slate-900 border border-slate-700/80 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in overflow-y-auto">
+      <div className="bg-slate-900 border border-slate-700/80 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative overflow-hidden my-auto max-h-[95vh] overflow-y-auto">
         {/* Close Button (only accessible if user is already logged in) */}
         {user && (
           <button
@@ -143,10 +156,10 @@ export function AuthModal() {
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
           <div>
-            <label className="block text-slate-300 font-bold mb-1">Email Address</label>
+            <label className="block text-slate-300 font-bold mb-1">Email Address or Username</label>
             <div className="relative">
               <input
-                type="email"
+                type="text"
                 required
                 placeholder="coach@football.com"
                 value={email}
@@ -229,6 +242,41 @@ export function AuthModal() {
             {submitting ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Permanent Account'}
           </button>
         </form>
+
+        {/* 1-Tap Demo Quick Select */}
+        {demoUsers && demoUsers.length > 0 && (
+          <div className="mt-5 pt-4 border-t border-slate-800/80">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1">
+                <Sparkles className="w-3 h-3 text-amber-400" />
+                <span>Instant Demo Access (1-Tap):</span>
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {demoUsers.slice(0, 4).map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => handleDemoClick(d.id)}
+                  className="p-2 rounded-xl bg-slate-950 hover:bg-slate-800/90 border border-slate-800 hover:border-sky-500/50 text-left transition flex items-center space-x-2 group"
+                >
+                  <div className="w-6 h-6 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs font-bold shrink-0 group-hover:bg-sky-500 group-hover:text-slate-950 transition">
+                    {d.display_name ? d.display_name.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-slate-200 truncate group-hover:text-white">
+                      {d.display_name || d.username}
+                    </div>
+                    <div className="text-[10px] text-slate-500 truncate">
+                      {d.favorite_team || 'Fan'}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
