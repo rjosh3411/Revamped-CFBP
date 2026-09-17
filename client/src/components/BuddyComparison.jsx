@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { UserRecordBanner } from './UserRecordBanner';
+import { ErrorBoundary } from './ErrorBoundary';
 import { 
   Swords, Shield, CheckCircle2, ChevronDown, Copy, Check, 
   Flame, Award, Trophy, Users, Star, ArrowRight, Zap, Target
@@ -263,7 +264,9 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
   return (
     <div className="space-y-6">
       {/* Overall Season Performance Banner */}
-      <UserRecordBanner activeWeek={currentWeek} />
+      <ErrorBoundary fallback={null}>
+        <UserRecordBanner activeWeek={currentWeek} />
+      </ErrorBoundary>
 
       {/* Top Header & Party Controls */}
       <div className="bg-gradient-to-r from-slate-950 via-[#0d121c] to-slate-950 border border-white/10 rounded-3xl p-5 sm:p-6 shadow-2xl">

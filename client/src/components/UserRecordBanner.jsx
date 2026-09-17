@@ -36,12 +36,13 @@ export function UserRecordBanner({ onWeekSelect, activeWeek = 1, refreshTrigger 
   const totalPoints = stats?.totalPoints || user?.total_points || 0;
   const currentStreak = stats?.currentStreak !== undefined ? stats.currentStreak : (user?.current_streak || 0);
   const bestStreak = stats?.bestStreak !== undefined ? stats.bestStreak : (user?.best_streak || 0);
-  const lockAccuracy = stats?.lockStats?.accuracy;
+  const lockAccuracy = stats?.lockStats?.accuracy ?? null;
   const lockCorrect = stats?.lockStats?.correct || 0;
+  const lockTotal = stats?.lockStats?.total || 0;
   const ouPoints = stats?.overUnderStats?.pointsAwarded || 0;
   const ouCorrect = stats?.overUnderStats?.correct || 0;
   const ouTotal = stats?.overUnderStats?.total || 0;
-  const ouAccuracy = stats?.overUnderStats?.accuracy;
+  const ouAccuracy = stats?.overUnderStats?.accuracy ?? null;
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">

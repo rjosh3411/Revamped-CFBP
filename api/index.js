@@ -18,7 +18,7 @@ module.exports = (req, res) => {
   }
   return app(req, res);
 };
-// Vercel redeploy Wed Sep 16 19:40:00 EDT 2026 - Dynamic week selection, 401 token cleanup, and 1-tap instant demo access
+// Vercel redeploy Thu Sep 17 09:17:00 EDT 2026 - ErrorBoundary integration and undefined lockTotal fix
 
 
 

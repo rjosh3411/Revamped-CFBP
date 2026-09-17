@@ -8,6 +8,7 @@ import { BuddyComparison } from './components/BuddyComparison';
 import { StandingsView } from './components/StandingsView';
 import { PartyHub } from './components/PartyHub';
 import { AuthModal } from './components/AuthModal';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { getCurrentSeasonWeek } from './utils/weekHelper';
 import { 
   Trophy, CheckCircle2, AlertCircle, RefreshCw, 
@@ -91,11 +92,13 @@ export function App() {
       />
 
       {/* Live Scoreboard Ribbon */}
-      <LiveScoreboardRibbon
-        onSelectGame={(g) => {
-          setActiveTab('picks');
-        }}
-      />
+      <ErrorBoundary fallback={<div className="h-10" />}>
+        <LiveScoreboardRibbon
+          onSelectGame={(g) => {
+            setActiveTab('picks');
+          }}
+        />
+      </ErrorBoundary>
 
       {/* Floating Notification Toast */}
       {toast && (
@@ -111,35 +114,37 @@ export function App() {
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 flex-1 w-full relative z-10">
-        {/* TAB 1: MAKE PICKS (Verified Team Schedules) */}
-        {activeTab === 'picks' && (
-          <MakePicksView />
-        )}
+        <ErrorBoundary message="Unable to load the current view. Click retry below to reload.">
+          {/* TAB 1: MAKE PICKS (Verified Team Schedules) */}
+          {activeTab === 'picks' && (
+            <MakePicksView />
+          )}
 
-        {/* TAB 2: BUD COMPARISON (Agreed vs Disagreed Pick Matrix) */}
-        {activeTab === 'compare' && (
-          <BuddyComparison
-            parties={parties}
-            currentWeek={currentWeek}
-            currentYear={2026}
-          />
-        )}
+          {/* TAB 2: BUD COMPARISON (Agreed vs Disagreed Pick Matrix) */}
+          {activeTab === 'compare' && (
+            <BuddyComparison
+              parties={parties}
+              currentWeek={currentWeek}
+              currentYear={2026}
+            />
+          )}
 
-        {/* TAB 3: STANDINGS & NATIONAL POLLS */}
-        {activeTab === 'standings' && (
-          <StandingsView />
-        )}
+          {/* TAB 3: STANDINGS & NATIONAL POLLS */}
+          {activeTab === 'standings' && (
+            <StandingsView />
+          )}
 
-        {/* TAB 4: PARTY HUB (Prediction Parties, Leaderboard, Trash Talk & Leave Party) */}
-        {activeTab === 'parties' && (
-          <PartyHub
-            parties={parties}
-            onPartyCreated={handlePartyCreated}
-            onPartyJoined={handlePartyJoined}
-            onPartyLeft={handlePartyLeft}
-            onSelectPartyForComparison={() => setActiveTab('compare')}
-          />
-        )}
+          {/* TAB 4: PARTY HUB (Prediction Parties, Leaderboard, Trash Talk & Leave Party) */}
+          {activeTab === 'parties' && (
+            <PartyHub
+              parties={parties}
+              onPartyCreated={handlePartyCreated}
+              onPartyJoined={handlePartyJoined}
+              onPartyLeft={handlePartyLeft}
+              onSelectPartyForComparison={() => setActiveTab('compare')}
+            />
+          )}
+        </ErrorBoundary>
       </main>
 
       {/* Persistent Auth Modal */}
