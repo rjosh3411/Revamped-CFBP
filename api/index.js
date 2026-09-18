@@ -18,8 +18,5 @@ module.exports = (req, res) => {
   }
   return app(req, res);
 };
-// Vercel redeploy Thu Sep 17 09:17:00 EDT 2026 - ErrorBoundary integration and undefined lockTotal fix
-
-
-
+// Vercel redeploy Fri Sep 18 16:20:00 EDT 2026 - Enhanced split & agreed picks with canonical team resolution and O/U breakdown
 

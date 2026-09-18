@@ -3,9 +3,11 @@ import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { UserRecordBanner } from './UserRecordBanner';
 import { ErrorBoundary } from './ErrorBoundary';
+import { getCurrentSeasonWeek } from '../utils/weekHelper';
 import { 
   Swords, Shield, CheckCircle2, ChevronDown, Copy, Check, 
-  Flame, Award, Trophy, Users, Star, ArrowRight, Zap, Target
+  Flame, Award, Trophy, Users, Star, ArrowRight, Zap, Target,
+  Calendar, Clock, Tv, AlertCircle, HelpCircle
 } from 'lucide-react';
 
 function cleanStr(s) {
@@ -15,10 +17,10 @@ function cleanStr(s) {
 const CANONICAL_MAP = {
   'lsu': 'lsu', 'lsutigers': 'lsu', 'louisianastate': 'lsu', 'louisianastatetigers': 'lsu', '99': 'lsu',
   'clemson': 'clemson', 'clemsontigers': 'clemson', '228': 'clemson',
-  'uga': 'georgia', 'georgia': 'georgia', 'georgiabulldogs': 'georgia', '61': 'georgia',
+  'uga': 'georgia', 'georgia': 'georgia', 'georgiabulldogs': 'georgia', 'bulldogs': 'georgia', '61': 'georgia',
   'bama': 'alabama', 'alabama': 'alabama', 'alabamacrimsontide': 'alabama', 'crimsontide': 'alabama', '333': 'alabama',
   'tex': 'texas', 'texas': 'texas', 'texaslonghorns': 'texas', 'longhorns': 'texas', '251': 'texas',
-  'tam': 'texas-am', 'tamu': 'texas-am', 'texasam': 'texas-am', 'texasaandm': 'texas-am', 'texasammaggies': 'texas-am', 'texasamaggies': 'texas-am', 'aggies': 'texas-am', '245': 'texas-am',
+  'tam': 'texas-am', 'tamu': 'texas-am', 'texasam': 'texas-am', 'texasaandm': 'texas-am', 'texasammaggies': 'texas-am', 'texasaggies': 'texas-am', 'aggies': 'texas-am', '245': 'texas-am',
   'miss': 'ole-miss', 'olemiss': 'ole-miss', 'olemissrebels': 'ole-miss', 'rebels': 'ole-miss', '145': 'ole-miss',
   'msst': 'mississippi-state', 'mississippistate': 'mississippi-state', 'mississippistatebulldogs': 'mississippi-state', '344': 'mississippi-state',
   'tenn': 'tennessee', 'tennessee': 'tennessee', 'tennesseevolunteers': 'tennessee', 'vols': 'tennessee', 'volunteers': 'tennessee', '2633': 'tennessee',
@@ -28,7 +30,7 @@ const CANONICAL_MAP = {
   'aub': 'auburn', 'auburn': 'auburn', 'auburntigers': 'auburn', '2': 'auburn',
   'sc': 'south-carolina', 'southcarolina': 'south-carolina', 'southcarolinagamecocks': 'south-carolina', 'gamecocks': 'south-carolina', '2579': 'south-carolina',
   'ark': 'arkansas', 'arkansas': 'arkansas', 'arkansasrazorbacks': 'arkansas', 'razorbacks': 'arkansas', '8': 'arkansas',
-  'uk': 'kentucky', 'kentucky': 'kentucky', 'kentuckywildcats': 'kentucky', '96': 'kentucky',
+  'uk': 'kentucky', 'kentucky': 'kentucky', 'kentuckywildcats': 'kentucky', 'wildcats': 'kentucky', '96': 'kentucky',
   'van': 'vanderbilt', 'vandy': 'vanderbilt', 'vanderbiltcommodores': 'vanderbilt', 'commodores': 'vanderbilt', '238': 'vanderbilt',
   'osu': 'ohio-state', 'ohiostate': 'ohio-state', 'ohiostatebuckeyes': 'ohio-state', 'buckeyes': 'ohio-state', '194': 'ohio-state',
   'mich': 'michigan', 'michigan': 'michigan', 'michiganwolverines': 'michigan', 'wolverines': 'michigan', '130': 'michigan',
@@ -75,90 +77,37 @@ const CANONICAL_MAP = {
   'northwestern': 'northwestern', 'northwesternwildcats': 'northwestern', '77': 'northwestern'
 };
 
-function normalizeTeamKey(strOrPick) {
-  if (!strOrPick) return '';
-  let raw = '';
-  if (typeof strOrPick === 'object') {
-    raw = strOrPick.predicted_winner_id || strOrPick.predictedWinnerId || strOrPick.predicted_winner_name || strOrPick.predictedWinnerName || strOrPick.id || strOrPick.name || '';
-  } else {
-    raw = String(strOrPick);
-  }
-  const clean = cleanStr(raw);
-  if (!clean) return '';
-  return CANONICAL_MAP[clean] || clean;
-}
+const WEEKS_LIST = [
+  { number: 0, label: 'W0' },
+  { number: 1, label: 'W1' },
+  { number: 2, label: 'W2' },
+  { number: 3, label: 'W3' },
+  { number: 4, label: 'W4' },
+  { number: 5, label: 'W5' },
+  { number: 6, label: 'W6' },
+  { number: 7, label: 'W7' },
+  { number: 8, label: 'W8' },
+  { number: 9, label: 'W9' },
+  { number: 10, label: 'W10' },
+  { number: 11, label: 'W11' },
+  { number: 12, label: 'W12' },
+  { number: 13, label: 'W13' },
+  { number: 14, label: 'CCG' },
+  { number: 15, label: 'A/N' },
+  { number: 16, label: 'CFP1' },
+  { number: 17, label: 'NY6' },
+  { number: 18, label: 'NCG' }
+];
 
-function resolvePickToTeam(pick, homeTeam, awayTeam) {
-  if (!pick) return null;
-  const pId = String(pick.predicted_winner_id || pick.predictedWinnerId || '').toLowerCase().trim();
-  const pName = String(pick.predicted_winner_name || pick.predictedWinnerName || '').toLowerCase().trim();
-  const pClean = cleanStr(pName || pId);
-  const pCanonical = normalizeTeamKey(pName || pId);
-
-  const hId = String(homeTeam?.id || '').toLowerCase().trim();
-  const hName = String(homeTeam?.name || '').toLowerCase().trim();
-  const hAbbr = String(homeTeam?.abbreviation || '').toLowerCase().trim();
-  const hClean = cleanStr(hName);
-  const hCanonical = normalizeTeamKey(hName || hId);
-
-  const aId = String(awayTeam?.id || '').toLowerCase().trim();
-  const aName = String(awayTeam?.name || '').toLowerCase().trim();
-  const aAbbr = String(awayTeam?.abbreviation || '').toLowerCase().trim();
-  const aClean = cleanStr(aName);
-  const aCanonical = normalizeTeamKey(aName || aId);
-
-  if (pCanonical && hCanonical && pCanonical === hCanonical) return 'HOME';
-  if (pCanonical && aCanonical && pCanonical === aCanonical) return 'AWAY';
-
-  if (pId && (pId === hId || (homeTeam?.espnId && pId === String(homeTeam.espnId)))) return 'HOME';
-  if (pId && (pId === aId || (awayTeam?.espnId && pId === String(awayTeam.espnId)))) return 'AWAY';
-
-  if (pClean && hClean && (pClean === hClean || pClean.includes(hClean) || hClean.includes(pClean) || pClean === cleanStr(hAbbr) || pClean === cleanStr(hId))) return 'HOME';
-  if (pClean && aClean && (pClean === aClean || pClean.includes(aClean) || aClean.includes(pClean) || pClean === cleanStr(aAbbr) || pClean === cleanStr(aId))) return 'AWAY';
-
-  return pClean;
-}
-
-function arePicksAgreed(pickA, pickB, homeTeam, awayTeam) {
-  if (!pickA || !pickB) return false;
-
-  const idA = (pickA.predicted_winner_id || pickA.predictedWinnerId || '').toLowerCase().trim();
-  const idB = (pickB.predicted_winner_id || pickB.predictedWinnerId || '').toLowerCase().trim();
-  if (idA && idB && idA === idB) return true;
-
-  const nameA = (pickA.predicted_winner_name || pickA.predictedWinnerName || '').toLowerCase().trim();
-  const nameB = (pickB.predicted_winner_name || pickB.predictedWinnerName || '').toLowerCase().trim();
-  if (nameA && nameB && nameA === nameB) return true;
-
-  const keyA = normalizeTeamKey(pickA);
-  const keyB = normalizeTeamKey(pickB);
-  if (keyA && keyB && keyA === keyB) return true;
-
-  const keyAName = normalizeTeamKey(nameA);
-  const keyBName = normalizeTeamKey(nameB);
-  if (keyAName && keyBName && keyAName === keyBName) return true;
-  if (keyA && keyBName && keyA === keyBName) return true;
-  if (keyAName && keyB && keyAName === keyB) return true;
-
-  if (homeTeam && awayTeam) {
-    const sideA = resolvePickToTeam(pickA, homeTeam, awayTeam);
-    const sideB = resolvePickToTeam(pickB, homeTeam, awayTeam);
-    if (sideA && sideB && (sideA === 'HOME' || sideA === 'AWAY') && sideA === sideB) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2026 }) {
+export function BuddyComparison({ parties = [], currentWeek: initialWeek, currentYear = 2026 }) {
   const { user } = useAuth();
+  const [selectedWeek, setSelectedWeek] = useState(initialWeek !== undefined ? initialWeek : getCurrentSeasonWeek());
   const [selectedPartyId, setSelectedPartyId] = useState(parties?.[0]?.id || '');
   const [selectedBuddyId, setSelectedBuddyId] = useState('');
   const [comparisonData, setComparisonData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [filterMode, setFilterMode] = useState('ALL'); // 'ALL', 'DISAGREED', 'AGREED', 'LOCKS'
+  const [filterMode, setFilterMode] = useState('ALL'); // 'ALL', 'DISAGREED', 'AGREED', 'LOCKS', 'PENDING'
   const [copiedCode, setCopiedCode] = useState(false);
 
   // Sync selectedPartyId when parties prop loads
@@ -168,7 +117,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
     }
   }, [parties, selectedPartyId]);
 
-  // Load comparison data whenever party or week changes
+  // Load comparison data whenever party, buddy, or week changes
   useEffect(() => {
     let isMounted = true;
     if (selectedPartyId) {
@@ -176,7 +125,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
       setError(null);
       api.getBuddyComparison(selectedPartyId, {
         year: currentYear || 2026,
-        week: currentWeek || 1,
+        week: selectedWeek,
         buddyId: selectedBuddyId || undefined
       }).then(data => {
         if (isMounted && data) {
@@ -190,7 +139,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
       });
     }
     return () => { isMounted = false; };
-  }, [selectedPartyId, selectedBuddyId, currentWeek, currentYear]);
+  }, [selectedPartyId, selectedBuddyId, selectedWeek, currentYear]);
 
   const selectedParty = parties.find(p => p.id === selectedPartyId) || parties[0] || comparisonData?.party;
   const buddies = comparisonData?.buddies || [];
@@ -209,34 +158,26 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
   const buddyAvatar = selectedBuddy?.avatarUrl || selectedBuddy?.avatar_url;
   const buddyTeam = selectedBuddy?.favoriteTeam || selectedBuddy?.favorite_team || 'College Football';
 
-  const comparisons = (comparisonData?.comparisons || []).map(c => {
-    if (c.myPick && c.buddyPick) {
-      const isAgreed = arePicksAgreed(c.myPick, c.buddyPick, c.game?.homeTeam, c.game?.awayTeam);
-      return {
-        ...c,
-        comparisonStatus: isAgreed ? 'AGREED' : 'DISAGREED'
-      };
-    }
-    return c;
-  });
+  const comparisons = comparisonData?.comparisons || [];
 
+  // Accurate Counts
+  const winnerSplitCount = comparisons.filter(c => c.comparisonStatus === 'DISAGREED').length;
+  const ouSplitCount = comparisons.filter(c => c.comparisonStatus === 'OU_SPLIT').length;
+  const totalSplitCount = winnerSplitCount + ouSplitCount;
   const agreedCount = comparisons.filter(c => c.comparisonStatus === 'AGREED').length;
-  const disagreedCount = comparisons.filter(c => c.comparisonStatus === 'DISAGREED').length;
-  const totalCompared = agreedCount + disagreedCount;
-  const agreementRate = totalCompared > 0 ? Math.round((agreedCount / totalCompared) * 100) : 0;
-
+  const pendingCount = comparisons.filter(c => c.comparisonStatus === 'MY_ONLY' || c.comparisonStatus === 'BUDDY_ONLY').length;
   const lockClashes = comparisons.filter(c => {
     const isLock = (c.myPick?.confidence_level === 3 || c.myPick?.confidence_points === 3) ||
                    (c.buddyPick?.confidence_level === 3 || c.buddyPick?.confidence_points === 3);
-    return isLock && c.comparisonStatus === 'DISAGREED';
+    return isLock && (c.comparisonStatus === 'DISAGREED' || c.comparisonStatus === 'OU_SPLIT');
   });
 
   const summary = {
     ...comparisonData?.summary,
-    totalCompared,
+    totalCompared: totalSplitCount + agreedCount,
     agreedCount,
-    disagreedCount,
-    agreementRate
+    disagreedCount: totalSplitCount,
+    agreementRate: (totalSplitCount + agreedCount) > 0 ? Math.round((agreedCount / (totalSplitCount + agreedCount)) * 100) : 0
   };
 
   const pointDiff = Math.abs(headToHeadClash?.pointDifferential || 0);
@@ -251,13 +192,14 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
 
   // Filter comparisons
   const filteredComparisons = comparisons.filter(c => {
+    if (filterMode === 'DISAGREED') return c.comparisonStatus === 'DISAGREED' || c.comparisonStatus === 'OU_SPLIT';
     if (filterMode === 'AGREED') return c.comparisonStatus === 'AGREED';
-    if (filterMode === 'DISAGREED') return c.comparisonStatus === 'DISAGREED';
     if (filterMode === 'LOCKS') {
       const isLock = (c.myPick?.confidence_level === 3 || c.myPick?.confidence_points === 3) ||
                      (c.buddyPick?.confidence_level === 3 || c.buddyPick?.confidence_points === 3);
-      return isLock && c.comparisonStatus === 'DISAGREED';
+      return isLock && (c.comparisonStatus === 'DISAGREED' || c.comparisonStatus === 'OU_SPLIT');
     }
+    if (filterMode === 'PENDING') return c.comparisonStatus === 'MY_ONLY' || c.comparisonStatus === 'BUDDY_ONLY';
     return true;
   });
 
@@ -265,7 +207,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
     <div className="space-y-6">
       {/* Overall Season Performance Banner */}
       <ErrorBoundary fallback={null}>
-        <UserRecordBanner activeWeek={currentWeek} />
+        <UserRecordBanner activeWeek={selectedWeek} />
       </ErrorBoundary>
 
       {/* Top Header & Party Controls */}
@@ -277,18 +219,18 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
               <span>Head-to-Head Party Rivalry Matrix</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-black text-white uppercase tracking-wide">
-              Split Decisions & Head-to-Head Clash
+              Split Decisions & Agreed Picks
             </h1>
             <p className="text-xs sm:text-sm text-white/60 max-w-xl mt-0.5">
-              Confidence-weighted head-to-head competition. Challenge your party friends on contested matchups and claim ultimate bragging rights!
+              Live split matchups, party consensus ratings, and confidence-weighted head-to-head competition!
             </p>
           </div>
 
-          {/* Party Selector */}
-          {parties.length > 0 && (
-            <div className="flex items-center gap-3 w-full lg:w-auto">
+          {/* Party Selector & Week Ribbon */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full lg:w-auto">
+            {parties.length > 0 && (
               <div className="relative flex-1 sm:flex-none">
-                <label className="block text-[10px] uppercase font-bold text-white/50 mb-1 tracking-wider">Active Party</label>
+                <label className="block text-[10px] uppercase font-bold text-white/50 mb-1 tracking-wider">Party</label>
                 <div className="relative group">
                   <select
                     value={selectedPartyId || parties[0]?.id}
@@ -297,7 +239,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
                       setSelectedPartyId(newPartyId);
                       setSelectedBuddyId('');
                     }}
-                    className="w-full sm:w-64 appearance-none bg-[#090d14]/90 hover:bg-[#121824] text-white text-xs font-bold pl-3.5 pr-10 py-2.5 rounded-2xl border border-white/10 hover:border-amber-400/50 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 shadow-xl transition backdrop-blur-md cursor-pointer"
+                    className="w-full sm:w-56 appearance-none bg-[#090d14]/90 hover:bg-[#121824] text-white text-xs font-bold pl-3.5 pr-10 py-2 rounded-2xl border border-white/10 hover:border-amber-400/50 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 shadow-xl transition backdrop-blur-md cursor-pointer"
                   >
                     {parties.map(p => (
                       <option key={p.id} value={p.id} className="bg-[#0e1218] text-white py-1.5">{p.icon || '🎉'} {p.name}</option>
@@ -306,8 +248,32 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
                   <ChevronDown className="w-4 h-4 text-amber-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 group-hover:opacity-100 transition" />
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+        </div>
+
+        {/* Quick Week Switcher Bar */}
+        <div className="pt-3.5 pb-1 flex items-center space-x-1.5 overflow-x-auto scrollbar-none border-b border-white/5">
+          <span className="text-[10px] font-black uppercase text-amber-400/80 mr-1.5 shrink-0 flex items-center space-x-1">
+            <Calendar className="w-3 h-3" />
+            <span>Week:</span>
+          </span>
+          {WEEKS_LIST.map(w => {
+            const isSelected = w.number === selectedWeek;
+            return (
+              <button
+                key={w.number}
+                onClick={() => setSelectedWeek(w.number)}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                  isSelected
+                    ? 'bg-amber-500 text-black font-black shadow-md shadow-amber-500/25 scale-102'
+                    : 'bg-black/50 hover:bg-white/10 text-white/60 hover:text-white border border-white/5'
+                }`}
+              >
+                {w.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Party Rivalry Quick-Switcher Roster */}
@@ -406,7 +372,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
               <div className="text-center flex flex-col items-center justify-center py-2">
                 <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-black uppercase tracking-widest mb-2 shadow-inner">
                   <Swords className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Contested Head-to-Head</span>
+                  <span>Season Contested Head-to-Head</span>
                 </div>
 
                 {/* Big Bold Head-to-Head Score */}
@@ -452,7 +418,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
                 {/* Agreement Meter Bar */}
                 <div className="w-full max-w-xs mt-3">
                   <div className="flex items-center justify-between text-[10px] font-bold text-white/60 mb-1">
-                    <span>Agreement: {summary.agreementRate}%</span>
+                    <span>Week {selectedWeek} Agreement: {summary.agreementRate}%</span>
                     <span>{summary.agreedCount} Agreed / {summary.disagreedCount} Split</span>
                   </div>
                   <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden flex">
@@ -514,7 +480,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
                 setError(null);
                 api.getBuddyComparison(selectedPartyId, {
                   year: currentYear || 2026,
-                  week: currentWeek || 1,
+                  week: selectedWeek,
                   buddyId: selectedBuddyId || undefined
                 }).then(data => {
                   if (data) setComparisonData(data);
@@ -563,7 +529,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
               </div>
               <button
                 onClick={handleCopyCode}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider transition flex items-center justify-center space-x-1.5 shadow-lg active:scale-95"
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider transition flex items-center justify-center space-x-1.5 shadow-lg active:scale-95 cursor-pointer"
               >
                 {copiedCode ? <Check className="w-4 h-4 text-slate-950" /> : <Copy className="w-4 h-4 text-slate-950" />}
                 <span>{copiedCode ? 'Copied Code!' : 'Copy Code'}</span>
@@ -575,10 +541,10 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
         <>
           {/* Filter & View Mode Tabs */}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center space-x-1.5 bg-black/60 p-1.5 rounded-2xl border border-white/10 shadow-inner">
+            <div className="flex items-center space-x-1.5 bg-black/60 p-1.5 rounded-2xl border border-white/10 shadow-inner overflow-x-auto">
               <button
                 onClick={() => setFilterMode('ALL')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer whitespace-nowrap ${
                   filterMode === 'ALL'
                     ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20'
                     : 'text-white/60 hover:text-white'
@@ -588,30 +554,30 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
               </button>
               <button
                 onClick={() => setFilterMode('DISAGREED')}
-                className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+                className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer whitespace-nowrap ${
                   filterMode === 'DISAGREED'
                     ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
                     : 'text-orange-400 hover:bg-white/5'
                 }`}
               >
                 <Swords className="w-3.5 h-3.5 mr-1" />
-                <span>Split Rivalry ({summary.disagreedCount})</span>
+                <span>Split Rivalry ({totalSplitCount})</span>
               </button>
               <button
                 onClick={() => setFilterMode('AGREED')}
-                className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+                className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer whitespace-nowrap ${
                   filterMode === 'AGREED'
                     ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20'
                     : 'text-emerald-400 hover:bg-white/5'
                 }`}
               >
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                <span>Consensus ({summary.agreedCount})</span>
+                <span>Agreed Consensus ({agreedCount})</span>
               </button>
               {lockClashes.length > 0 && (
                 <button
                   onClick={() => setFilterMode('LOCKS')}
-                  className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+                  className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer whitespace-nowrap ${
                     filterMode === 'LOCKS'
                       ? 'bg-amber-400 text-black shadow-lg shadow-amber-400/20 animate-pulse'
                       : 'text-amber-300 hover:bg-white/5'
@@ -621,10 +587,23 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
                   <span>Lock Clashes ({lockClashes.length})</span>
                 </button>
               )}
+              {pendingCount > 0 && (
+                <button
+                  onClick={() => setFilterMode('PENDING')}
+                  className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer whitespace-nowrap ${
+                    filterMode === 'PENDING'
+                      ? 'bg-sky-500 text-black shadow-lg shadow-sky-500/20'
+                      : 'text-sky-300 hover:bg-white/5'
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5 mr-1" />
+                  <span>Awaiting Picks ({pendingCount})</span>
+                </button>
+              )}
             </div>
 
-            <div className="text-xs text-white/50">
-              Week <span className="text-amber-400 font-bold">{currentWeek}</span> Slate
+            <div className="text-xs text-white/50 font-bold">
+              Week <span className="text-amber-400 font-black">{selectedWeek}</span> Slate
             </div>
           </div>
 
@@ -639,61 +618,102 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
               <Shield className="w-12 h-12 text-white/20 mx-auto mb-3" />
               <h3 className="text-lg font-bold text-white mb-1">No matchups found for this filter</h3>
               <p className="text-sm text-white/40 max-w-md mx-auto">
-                {filterMode === 'DISAGREED' ? 'You and your buddy made identical predictions on all games!' : 'Submit your predictions in Make Picks to compare results!'}
+                {filterMode === 'DISAGREED' ? 'You and your buddy made matching predictions on all games!' : 'Submit your predictions in Make Picks to compare results!'}
               </p>
             </div>
           ) : (
-            <div className="space-y-3.5">
+            <div className="space-y-4">
               {filteredComparisons.map((c) => {
                 const g = c.game;
                 const myPick = c.myPick;
                 const buddyPick = c.buddyPick;
-                const isSplit = c.comparisonStatus === 'DISAGREED';
+                const isWinnerSplit = c.comparisonStatus === 'DISAGREED';
+                const isOuSplit = c.comparisonStatus === 'OU_SPLIT';
+                const isAgreed = c.comparisonStatus === 'AGREED';
+                const isMyOnly = c.comparisonStatus === 'MY_ONLY';
+                const isBuddyOnly = c.comparisonStatus === 'BUDDY_ONLY';
 
                 return (
                   <div 
                     key={g.id}
                     className={`rounded-2xl p-4 sm:p-5 border transition-all duration-200 ${
-                      isSplit
-                        ? 'bg-gradient-to-br from-[#121008] via-[#0e1218] to-[#120808] border-orange-500/30 shadow-xl'
-                        : 'bg-[#0e1218] border-white/10 shadow-lg'
+                      isWinnerSplit
+                        ? 'bg-gradient-to-br from-[#140e08] via-[#0e1218] to-[#140808] border-orange-500/40 shadow-xl'
+                        : isOuSplit
+                          ? 'bg-gradient-to-br from-[#100e18] via-[#0e1218] to-[#0c0d18] border-indigo-500/40 shadow-xl'
+                          : isAgreed
+                            ? 'bg-gradient-to-br from-[#0a120c] via-[#0e1218] to-[#0a120c] border-emerald-500/30 shadow-lg'
+                            : 'bg-[#0e1218] border-white/10 shadow-lg'
                     }`}
                   >
                     {/* Game Matchup Header */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-white/5">
-                      <div className="flex items-center space-x-3">
+                      <div className="flex items-center space-x-3 flex-wrap">
                         <div className="flex items-center space-x-2">
                           {g.awayTeam?.logo && (
-                            <img src={g.awayTeam.logo} alt={g.awayTeam.name || 'Away Team'} className="w-6 h-6 object-contain" />
+                            <img src={g.awayTeam.logo} alt={g.awayTeam.name || 'Away'} className="w-7 h-7 object-contain drop-shadow" />
                           )}
                           <span className="font-bold text-white text-xs sm:text-sm">
-                            {g.awayTeam?.rank ? `#${g.awayTeam.rank} ` : ''}{g.awayTeam?.name || 'Away Team'}
+                            {g.awayTeam?.rank ? <span className="text-amber-400 font-black mr-1">#{g.awayTeam.rank}</span> : ''}
+                            {g.awayTeam?.name || 'Away Team'}
                           </span>
+                          {g.awayTeam?.score !== undefined && g.status !== 'STATUS_SCHEDULED' && (
+                            <span className="font-mono font-black text-amber-300 text-sm bg-black/40 px-1.5 py-0.5 rounded border border-white/5">
+                              {g.awayTeam.score}
+                            </span>
+                          )}
                         </div>
+
                         <span className="text-white/40 font-black text-xs">@</span>
+
                         <div className="flex items-center space-x-2">
                           {g.homeTeam?.logo && (
-                            <img src={g.homeTeam.logo} alt={g.homeTeam.name || 'Home Team'} className="w-6 h-6 object-contain" />
+                            <img src={g.homeTeam.logo} alt={g.homeTeam.name || 'Home'} className="w-7 h-7 object-contain drop-shadow" />
                           )}
                           <span className="font-bold text-white text-xs sm:text-sm">
-                            {g.homeTeam?.rank ? `#${g.homeTeam.rank} ` : ''}{g.homeTeam?.name || 'Home Team'}
+                            {g.homeTeam?.rank ? <span className="text-amber-400 font-black mr-1">#{g.homeTeam.rank}</span> : ''}
+                            {g.homeTeam?.name || 'Home Team'}
                           </span>
+                          {g.homeTeam?.score !== undefined && g.status !== 'STATUS_SCHEDULED' && (
+                            <span className="font-mono font-black text-amber-300 text-sm bg-black/40 px-1.5 py-0.5 rounded border border-white/5">
+                              {g.homeTeam.score}
+                            </span>
+                          )}
                         </div>
                       </div>
 
                       {/* Status / Agreement Badge */}
-                      <div className="flex items-center space-x-2">
-                        {isSplit ? (
+                      <div className="flex items-center space-x-2 flex-wrap gap-1">
+                        {isWinnerSplit && (
                           <span className="px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30 text-[10px] font-black uppercase flex items-center space-x-1">
                             <Swords className="w-3 h-3" />
-                            <span>Split Rivalry Matchup</span>
+                            <span>Winner Split Rivalry</span>
                           </span>
-                        ) : (
+                        )}
+                        {isOuSplit && (
+                          <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-black uppercase flex items-center space-x-1">
+                            <span>⚖️ O/U Split • Agreed Winner</span>
+                          </span>
+                        )}
+                        {isAgreed && (
                           <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase flex items-center space-x-1">
                             <CheckCircle2 className="w-3 h-3" />
                             <span>Agreed Consensus</span>
                           </span>
                         )}
+                        {isMyOnly && (
+                          <span className="px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-black uppercase flex items-center space-x-1">
+                            <Clock className="w-3 h-3" />
+                            <span>Awaiting Rival Pick</span>
+                          </span>
+                        )}
+                        {isBuddyOnly && (
+                          <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-black uppercase flex items-center space-x-1">
+                            <Clock className="w-3 h-3" />
+                            <span>Awaiting Your Pick</span>
+                          </span>
+                        )}
+
                         <span className="text-[10px] text-white/40 font-medium">
                           {typeof g.odds === 'object' ? (g.odds?.fullLine || g.odds?.spreadText || g.broadcast || '2026 Matchup') : (g.odds || g.broadcast || '2026 Matchup')}
                         </span>
@@ -715,7 +735,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
                           <div className="flex items-center space-x-1.5 flex-wrap">
                             {myPick?.confidence_points && (
                               <span className="text-[10px] text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                                {myPick.confidence_level === 3 ? '3x Lock (+30 PTS)' : myPick.confidence_level === 2 ? '2x Med (+20 PTS)' : '1x (+10 PTS)'}
+                                {myPick.confidence_level === 3 ? '3★ Lock (+30 PTS)' : myPick.confidence_level === 2 ? '2★ Med (+20 PTS)' : '1★ (+10 PTS)'}
                               </span>
                             )}
                             {myPick?.over_under_pick && (
@@ -731,8 +751,20 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
                             )}
                           </div>
                         </div>
-                        <div className="font-black text-white text-sm">
-                          {myPick?.predicted_winner_name || (myPick?.over_under_pick ? `O/U: ${myPick.over_under_pick} ${myPick.over_under_line || ''}` : 'No prediction made')}
+
+                        <div className="flex items-center justify-between">
+                          <div className="font-black text-white text-sm">
+                            {myPick?.predicted_winner_name || (myPick?.over_under_pick ? `O/U: ${myPick.over_under_pick} ${myPick.over_under_line || ''}` : 'No prediction made')}
+                          </div>
+                          {myPick && myPick.is_correct !== null && (
+                            <span className={`text-xs font-black px-2 py-0.5 rounded ${
+                              myPick.is_correct === 1 
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                : 'bg-red-500/20 text-red-300 border border-red-500/40'
+                            }`}>
+                              {myPick.is_correct === 1 ? `+${myPick.points_awarded || (myPick.confidence_points || 1) * 10} PTS` : '0 PTS'}
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -749,7 +781,7 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
                           <div className="flex items-center space-x-1.5 flex-wrap">
                             {buddyPick?.confidence_points && (
                               <span className="text-[10px] text-indigo-300 font-bold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
-                                {buddyPick.confidence_level === 3 ? '3x Lock (+30 PTS)' : buddyPick.confidence_level === 2 ? '2x Med (+20 PTS)' : '1x (+10 PTS)'}
+                                {buddyPick.confidence_level === 3 ? '3★ Lock (+30 PTS)' : buddyPick.confidence_level === 2 ? '2★ Med (+20 PTS)' : '1★ (+10 PTS)'}
                               </span>
                             )}
                             {buddyPick?.over_under_pick && (
@@ -765,11 +797,49 @@ export function BuddyComparison({ parties = [], currentWeek = 1, currentYear = 2
                             )}
                           </div>
                         </div>
-                        <div className="font-black text-white text-sm">
-                          {buddyPick?.predicted_winner_name || (buddyPick?.over_under_pick ? `O/U: ${buddyPick.over_under_pick} ${buddyPick.over_under_line || ''}` : 'No prediction made')}
+
+                        <div className="flex items-center justify-between">
+                          <div className="font-black text-white text-sm">
+                            {buddyPick?.predicted_winner_name || (buddyPick?.over_under_pick ? `O/U: ${buddyPick.over_under_pick} ${buddyPick.over_under_line || ''}` : 'No prediction made')}
+                          </div>
+                          {buddyPick && buddyPick.is_correct !== null && (
+                            <span className={`text-xs font-black px-2 py-0.5 rounded ${
+                              buddyPick.is_correct === 1 
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                : 'bg-red-500/20 text-red-300 border border-red-500/40'
+                            }`}>
+                              {buddyPick.is_correct === 1 ? `+${buddyPick.points_awarded || (buddyPick.confidence_points || 1) * 10} PTS` : '0 PTS'}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
+
+                    {/* Party Consensus Progress Bar */}
+                    {c.consensus && c.consensus.totalPicks > 0 && (
+                      <div className="mt-3 pt-2.5 border-t border-white/5">
+                        <div className="flex items-center justify-between text-[10px] font-bold text-white/50 mb-1">
+                          <span>
+                            Party Consensus: <strong className="text-amber-400">{c.consensus.consensusTeam}</strong> ({c.consensus.totalPicks} picks)
+                          </span>
+                          <span>
+                            {c.consensus.awayPct}% {g.awayTeam?.name} / {c.consensus.homePct}% {g.homeTeam?.name}
+                          </span>
+                        </div>
+                        <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden flex">
+                          <div 
+                            className="bg-indigo-500 h-full transition-all duration-300"
+                            style={{ width: `${c.consensus.awayPct}%` }}
+                            title={`${g.awayTeam?.name}: ${c.consensus.awayPct}%`}
+                          />
+                          <div 
+                            className="bg-amber-500 h-full transition-all duration-300"
+                            style={{ width: `${c.consensus.homePct}%` }}
+                            title={`${g.homeTeam?.name}: ${c.consensus.homePct}%`}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}

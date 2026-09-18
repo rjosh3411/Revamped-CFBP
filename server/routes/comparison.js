@@ -6,221 +6,6 @@ const { calculateBettingLine } = require('../services/oddsService');
 const gradingService = require('../services/gradingService');
 const { authenticateToken } = require('../middleware/auth');
 
-// GET /api/comparison/party/:partyId
-router.get('/party/:partyId', authenticateToken, async (req, res) => {
-  try {
-    const partyId = req.params.partyId;
-    const year = parseInt(req.query.year || 2026, 10);
-    const week = parseInt(req.query.week || 1, 10);
-    const buddyId = req.query.buddyId;
-
-    // Auto-sync live scores and grade completed matchups
-    await gradingService.syncAndGradeLiveScores().catch(e => console.warn('Comparison grading warning:', e));
-
-    // Check party membership & details
-    const party = await db.prepare('SELECT * FROM parties WHERE id = ?').get(partyId);
-    if (!party) {
-      return res.status(404).json({ error: 'Party not found' });
-    }
-
-    const isMember = await db.prepare('SELECT id FROM party_members WHERE party_id = ? AND user_id = ?').get(partyId, req.user.id);
-    if (!isMember) {
-      return res.status(403).json({ error: 'You are not a member of this party' });
-    }
-
-    // Get all party members
-    const members = await db.prepare(`
-      SELECT u.id, u.username, u.display_name, u.favorite_team, u.avatar_url,
-             u.total_points, u.correct_picks, u.total_picks, u.current_streak,
-             pm.role,
-             (SELECT COUNT(*) FROM picks WHERE user_id = u.id AND confidence_level = 3 AND is_correct = 1) as high_conf_correct,
-             (SELECT COUNT(*) FROM picks WHERE user_id = u.id AND confidence_level = 3 AND is_correct IS NOT NULL) as high_conf_total,
-             (SELECT COUNT(*) FROM picks WHERE user_id = u.id AND confidence_level = 2 AND is_correct = 1) as med_conf_correct,
-             (SELECT COUNT(*) FROM picks WHERE user_id = u.id AND confidence_level = 2 AND is_correct IS NOT NULL) as med_conf_total,
-             (SELECT COUNT(*) FROM picks WHERE user_id = u.id AND confidence_level = 1 AND is_correct = 1) as low_conf_correct,
-             (SELECT COUNT(*) FROM picks WHERE user_id = u.id AND confidence_level = 1 AND is_correct IS NOT NULL) as low_conf_total
-      FROM party_members pm
-      JOIN users u ON pm.user_id = u.id
-      WHERE pm.party_id = ?
-      ORDER BY u.display_name ASC
-    `).all(partyId);
-
-    const buddies = members.filter(m => m.id !== req.user.id);
-
-    // If alone in party (no other buddies), return empty comparisons with party metadata
-    if (buddies.length === 0) {
-      return res.json({
-        partyId,
-        party,
-        year,
-        week,
-        currentUser: {
-          id: req.user.id,
-          displayName: req.user.display_name,
-          avatarUrl: req.user.avatar_url,
-          favoriteTeam: req.user.favorite_team,
-          weeklyPoints: 0
-        },
-        buddies: [],
-        selectedBuddy: null,
-        summary: {
-          totalGames: 0,
-          totalCompared: 0,
-          agreedCount: 0,
-          disagreedCount: 0,
-          agreementRate: 0,
-          myWeeklyPoints: 0,
-          buddyWeeklyPoints: 0,
-          pointDifferential: 0
-        },
-        comparisons: []
-      });
-    }
-
-    let selectedBuddy = null;
-    if (buddyId) {
-      selectedBuddy = buddies.find(b => b.id === buddyId) || null;
-    }
-    if (!selectedBuddy && buddies.length > 0) {
-      selectedBuddy = buddies[0];
-    }
-
-    // Fetch verified 2026 schedules for this week
-    const weekSchedules = await db.prepare(`
-      SELECT * FROM team_schedules 
-      WHERE (season_year = 2026 OR season_year = '2026') AND week_number = ?
-      ORDER BY game_date ASC
-    `).all(week);
-
-    // Group schedules by game_id to construct complete 2026 matchups
-    const gamesMap = new Map();
-    for (const s of weekSchedules) {
-      if (!gamesMap.has(s.game_id)) {
-        const teamObj = TEAMS_2026.find(t => t.id === s.team_id) || {
-          id: s.team_id,
-          name: s.team_id.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-          logoUrl: `https://a.espncdn.com/i/teamlogos/ncaa/500/${s.team_id}.png`,
-          ranking: null,
-          colors: { primary: '#1e3a8a' }
-        };
-
-        const oppObj = TEAMS_2026.find(t => t.name.toLowerCase() === s.opponent_name.toLowerCase() || t.id === s.opponent_name.toLowerCase().replace(/\s+/g, '-')) || {
-          id: s.opponent_name.toLowerCase().replace(/\s+/g, '-'),
-          name: s.opponent_name,
-          logoUrl: s.opponent_logo || `https://a.espncdn.com/i/teamlogos/ncaa/500/7.png`,
-          ranking: s.opponent_rank || null,
-          colors: { primary: '#991b1b' }
-        };
-
-        const homeTeam = s.is_home === 1 ? {
-          id: teamObj.id,
-          name: teamObj.name,
-          logo: teamObj.logoUrl,
-          rank: teamObj.ranking,
-          score: s.team_score || 0
-        } : {
-          id: oppObj.id,
-          name: oppObj.name,
-          logo: oppObj.logoUrl,
-          rank: oppObj.ranking,
-          score: s.opponent_score || 0
-        };
-
-        const awayTeam = s.is_home === 1 ? {
-          id: oppObj.id,
-          name: oppObj.name,
-          logo: oppObj.logoUrl,
-          rank: oppObj.ranking,
-          score: s.opponent_score || 0
-        } : {
-          id: teamObj.id,
-          name: teamObj.name,
-          logo: teamObj.logoUrl,
-          rank: teamObj.ranking,
-          score: s.team_score || 0
-        };
-
-        const odds = calculateBettingLine({
-          homeTeamName: homeTeam.name,
-          homeRank: homeTeam.rank,
-          awayTeamName: awayTeam.name,
-          awayRank: awayTeam.rank,
-          isHome: true
-        });
-
-        gamesMap.set(s.game_id, {
-          id: s.game_id,
-          seasonYear: year,
-          weekNumber: week,
-          date: s.game_date,
-          name: `${awayTeam.name} at ${homeTeam.name}`,
-          shortName: `${awayTeam.name} @ ${homeTeam.name}`,
-          status: s.status,
-          statusDetail: s.status_detail,
-          isFinal: s.status === 'STATUS_FINAL',
-          isInProgress: s.status === 'STATUS_IN_PROGRESS',
-          winnerId: null,
-          broadcast: s.broadcast || 'ESPN',
-          venue: s.venue_name || 'College Stadium',
-          odds: odds?.fullLine || odds?.spreadText || null,
-          homeTeam,
-          awayTeam
-        });
-      }
-    }
-
-    const allWeekGames = Array.from(gamesMap.values());
-
-    // Fetch current user picks
-    const myPicks = await db.prepare(`
-      SELECT * FROM picks 
-      WHERE user_id = ? AND (season_year = ? OR season_year = ?) AND week_number = ?
-    `).all(req.user.id, year, String(year), week);
-
-    const myPicksMap = new Map();
-    myPicks.forEach(p => myPicksMap.set(p.game_id, p));
-
-    // Fetch buddy picks if buddy exists
-    const buddyPicksMap = new Map();
-    if (selectedBuddy) {
-      const buddyPicks = await db.prepare(`
-        SELECT * FROM picks 
-        WHERE user_id = ? AND (season_year = ? OR season_year = ?) AND week_number = ?
-      `).all(selectedBuddy.id, year, String(year), week);
-      buddyPicks.forEach(p => buddyPicksMap.set(p.game_id, p));
-    }
-
-    // Fetch all party members' picks for party consensus
-    const allPartyPicks = await db.prepare(`
-      SELECT p.*, u.display_name, u.avatar_url
-      FROM picks p
-      JOIN party_members pm ON p.user_id = pm.user_id
-      JOIN users u ON p.user_id = u.id
-      WHERE pm.party_id = ? AND (p.season_year = ? OR p.season_year = ?) AND p.week_number = ?
-    `).all(partyId, year, String(year), week);
-
-    const partyPicksByGame = new Map();
-    allPartyPicks.forEach(p => {
-      if (!partyPicksByGame.has(p.game_id)) {
-        partyPicksByGame.set(p.game_id, []);
-      }
-      partyPicksByGame.get(p.game_id).push(p);
-    });
-
-    let totalCompared = 0;
-    let agreedCount = 0;
-    let disagreedCount = 0;
-    let myWeeklyPoints = 0;
-    let buddyWeeklyPoints = 0;
-
-    // Filter games to either games that have picks by party members OR all scheduled 2026 games
-    const gamesWithPicks = allWeekGames.filter(g => {
-      return myPicksMap.has(g.id) || (selectedBuddy && buddyPicksMap.has(g.id)) || partyPicksByGame.has(g.id);
-    });
-
-    // If no picks made yet, show top scheduled games for the week
-    const targetGames = gamesWithPicks.length > 0 ? gamesWithPicks : allWeekGames.slice(0, 15);
-
 function cleanStr(s) {
   return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
@@ -228,10 +13,10 @@ function cleanStr(s) {
 const CANONICAL_MAP = {
   'lsu': 'lsu', 'lsutigers': 'lsu', 'louisianastate': 'lsu', 'louisianastatetigers': 'lsu', '99': 'lsu',
   'clemson': 'clemson', 'clemsontigers': 'clemson', '228': 'clemson',
-  'uga': 'georgia', 'georgia': 'georgia', 'georgiabulldogs': 'georgia', '61': 'georgia',
+  'uga': 'georgia', 'georgia': 'georgia', 'georgiabulldogs': 'georgia', 'bulldogs': 'georgia', '61': 'georgia',
   'bama': 'alabama', 'alabama': 'alabama', 'alabamacrimsontide': 'alabama', 'crimsontide': 'alabama', '333': 'alabama',
   'tex': 'texas', 'texas': 'texas', 'texaslonghorns': 'texas', 'longhorns': 'texas', '251': 'texas',
-  'tam': 'texas-am', 'tamu': 'texas-am', 'texasam': 'texas-am', 'texasaandm': 'texas-am', 'texasammaggies': 'texas-am', 'texasamaggies': 'texas-am', 'aggies': 'texas-am', '245': 'texas-am',
+  'tam': 'texas-am', 'tamu': 'texas-am', 'texasam': 'texas-am', 'texasaandm': 'texas-am', 'texasammaggies': 'texas-am', 'texasaggies': 'texas-am', 'aggies': 'texas-am', '245': 'texas-am',
   'miss': 'ole-miss', 'olemiss': 'ole-miss', 'olemissrebels': 'ole-miss', 'rebels': 'ole-miss', '145': 'ole-miss',
   'msst': 'mississippi-state', 'mississippistate': 'mississippi-state', 'mississippistatebulldogs': 'mississippi-state', '344': 'mississippi-state',
   'tenn': 'tennessee', 'tennessee': 'tennessee', 'tennesseevolunteers': 'tennessee', 'vols': 'tennessee', 'volunteers': 'tennessee', '2633': 'tennessee',
@@ -241,7 +26,7 @@ const CANONICAL_MAP = {
   'aub': 'auburn', 'auburn': 'auburn', 'auburntigers': 'auburn', '2': 'auburn',
   'sc': 'south-carolina', 'southcarolina': 'south-carolina', 'southcarolinagamecocks': 'south-carolina', 'gamecocks': 'south-carolina', '2579': 'south-carolina',
   'ark': 'arkansas', 'arkansas': 'arkansas', 'arkansasrazorbacks': 'arkansas', 'razorbacks': 'arkansas', '8': 'arkansas',
-  'uk': 'kentucky', 'kentucky': 'kentucky', 'kentuckywildcats': 'kentucky', '96': 'kentucky',
+  'uk': 'kentucky', 'kentucky': 'kentucky', 'kentuckywildcats': 'kentucky', 'wildcats': 'kentucky', '96': 'kentucky',
   'van': 'vanderbilt', 'vandy': 'vanderbilt', 'vanderbiltcommodores': 'vanderbilt', 'commodores': 'vanderbilt', '238': 'vanderbilt',
   'osu': 'ohio-state', 'ohiostate': 'ohio-state', 'ohiostatebuckeyes': 'ohio-state', 'buckeyes': 'ohio-state', '194': 'ohio-state',
   'mich': 'michigan', 'michigan': 'michigan', 'michiganwolverines': 'michigan', 'wolverines': 'michigan', '130': 'michigan',
@@ -285,7 +70,14 @@ const CANONICAL_MAP = {
   'purdue': 'purdue', 'purdueboilermakers': 'purdue', 'boilermakers': 'purdue', '2509': 'purdue',
   'rutgers': 'rutgers', 'rutgersscarletknights': 'rutgers', 'scarletknights': 'rutgers', '164': 'rutgers',
   'terps': 'maryland', 'maryland': 'maryland', 'marylandterrapins': 'maryland', 'terrapins': 'maryland', '120': 'maryland',
-  'northwestern': 'northwestern', 'northwesternwildcats': 'northwestern', '77': 'northwestern'
+  'northwestern': 'northwestern', 'northwesternwildcats': 'northwestern', '77': 'northwestern',
+  'boise': 'boise-state', 'boisestate': 'boise-state', 'boisestatebroncos': 'boise-state', '68': 'boise-state',
+  'memphis': 'memphis', 'memphistigers': 'memphis', '235': 'memphis',
+  'unlv': 'unlv', 'unlvrebels': 'unlv', '2439': 'unlv',
+  'tulane': 'tulane', 'tulanegreenwave': 'tulane', '2655': 'tulane',
+  'usf': 'usf', 'southflorida': 'usf', 'southfloridabulls': 'usf', '58': 'usf',
+  'utsa': 'utsa', 'utsaroadrunners': 'utsa', '2636': 'utsa',
+  'jmu': 'james-madison', 'jamesmadison': 'james-madison', 'jamesmadisondukes': 'james-madison', '256': 'james-madison'
 };
 
 function normalizeTeamKey(strOrPick) {
@@ -369,11 +161,336 @@ function arePicksAgreed(pickA, pickB, homeTeam, awayTeam) {
   return false;
 }
 
-    let myContestedPoints = 0;
-    let buddyContestedPoints = 0;
-    let myContestedWins = 0;
-    let buddyContestedWins = 0;
-    let totalContestedGames = 0;
+function areOuPicksAgreed(pickA, pickB) {
+  if (!pickA || !pickB) return null;
+  const ouA = pickA.over_under_pick || pickA.overUnderPick || null;
+  const ouB = pickB.over_under_pick || pickB.overUnderPick || null;
+  if (!ouA || !ouB) return null;
+  return ouA.toUpperCase() === ouB.toUpperCase();
+}
+
+// GET /api/comparison/party/:partyId
+router.get('/party/:partyId', authenticateToken, async (req, res) => {
+  try {
+    const partyId = req.params.partyId;
+    const year = parseInt(req.query.year || 2026, 10);
+    const week = parseInt(req.query.week || 1, 10);
+    const buddyId = req.query.buddyId;
+
+    // Auto-sync live scores and grade completed matchups
+    await gradingService.syncAndGradeLiveScores().catch(e => console.warn('Comparison grading warning:', e));
+
+    // Check party membership & details
+    const party = await db.prepare('SELECT * FROM parties WHERE id = ?').get(partyId);
+    if (!party) {
+      return res.status(404).json({ error: 'Party not found' });
+    }
+
+    const isMember = await db.prepare('SELECT id FROM party_members WHERE party_id = ? AND user_id = ?').get(partyId, req.user.id);
+    if (!isMember) {
+      return res.status(403).json({ error: 'You are not a member of this party' });
+    }
+
+    // Get all party members
+    const members = await db.prepare(`
+      SELECT u.id, u.username, u.display_name, u.favorite_team, u.avatar_url, u.jersey_number,
+             u.total_points, u.correct_picks, u.total_picks, u.current_streak,
+             pm.role,
+             (SELECT COUNT(*) FROM picks WHERE user_id = u.id AND confidence_level = 3 AND is_correct = 1) as high_conf_correct,
+             (SELECT COUNT(*) FROM picks WHERE user_id = u.id AND confidence_level = 3 AND is_correct IS NOT NULL) as high_conf_total,
+             (SELECT COUNT(*) FROM picks WHERE user_id = u.id AND confidence_level = 2 AND is_correct = 1) as med_conf_correct,
+             (SELECT COUNT(*) FROM picks WHERE user_id = u.id AND confidence_level = 2 AND is_correct IS NOT NULL) as med_conf_total,
+             (SELECT COUNT(*) FROM picks WHERE user_id = u.id AND confidence_level = 1 AND is_correct = 1) as low_conf_correct,
+             (SELECT COUNT(*) FROM picks WHERE user_id = u.id AND confidence_level = 1 AND is_correct IS NOT NULL) as low_conf_total
+      FROM party_members pm
+      JOIN users u ON pm.user_id = u.id
+      WHERE pm.party_id = ?
+      ORDER BY u.display_name ASC
+    `).all(partyId);
+
+    const buddies = members.filter(m => m.id !== req.user.id);
+
+    // If alone in party (no other buddies), return empty comparisons with party metadata
+    if (buddies.length === 0) {
+      return res.json({
+        partyId,
+        party,
+        year,
+        week,
+        currentUser: {
+          id: req.user.id,
+          displayName: req.user.display_name || req.user.username,
+          avatarUrl: req.user.avatar_url,
+          favoriteTeam: req.user.favorite_team,
+          jerseyNumber: req.user.jersey_number,
+          weeklyPoints: 0
+        },
+        buddies: [],
+        selectedBuddy: null,
+        summary: {
+          totalGames: 0,
+          totalCompared: 0,
+          agreedCount: 0,
+          disagreedCount: 0,
+          agreementRate: 0,
+          myWeeklyPoints: 0,
+          buddyWeeklyPoints: 0,
+          pointDifferential: 0
+        },
+        headToHeadClash: {
+          myContestedPoints: 0,
+          buddyContestedPoints: 0,
+          pointDifferential: 0,
+          myContestedWins: 0,
+          buddyContestedWins: 0,
+          totalContestedGames: 0,
+          seriesLeader: 'TIED'
+        },
+        rivalryRoster: [],
+        comparisons: []
+      });
+    }
+
+    let selectedBuddy = null;
+    if (buddyId) {
+      selectedBuddy = buddies.find(b => b.id === buddyId) || null;
+    }
+    if (!selectedBuddy && buddies.length > 0) {
+      selectedBuddy = buddies[0];
+    }
+
+    // 1. Load games from team_schedules AND games_cache for this week
+    const gamesMap = new Map();
+
+    const weekSchedules = await db.prepare(`
+      SELECT * FROM team_schedules 
+      WHERE (season_year = 2026 OR season_year = '2026') AND week_number = ?
+      ORDER BY game_date ASC
+    `).all(week);
+
+    for (const s of weekSchedules) {
+      if (!gamesMap.has(s.game_id)) {
+        const teamObj = TEAMS_2026.find(t => t.id === s.team_id) || {
+          id: s.team_id,
+          name: s.team_id.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          logoUrl: `https://a.espncdn.com/i/teamlogos/ncaa/500/${s.team_id}.png`,
+          ranking: null,
+          colors: { primary: '#1e3a8a' }
+        };
+
+        const oppObj = TEAMS_2026.find(t => t.name.toLowerCase() === s.opponent_name.toLowerCase() || t.id === s.opponent_name.toLowerCase().replace(/\s+/g, '-')) || {
+          id: s.opponent_name.toLowerCase().replace(/\s+/g, '-'),
+          name: s.opponent_name,
+          logoUrl: s.opponent_logo || `https://a.espncdn.com/i/teamlogos/ncaa/500/7.png`,
+          ranking: s.opponent_rank || null,
+          colors: { primary: '#991b1b' }
+        };
+
+        const homeTeam = s.is_home === 1 ? {
+          id: teamObj.id,
+          name: teamObj.name,
+          logo: teamObj.logoUrl,
+          rank: teamObj.ranking,
+          score: s.team_score || 0
+        } : {
+          id: oppObj.id,
+          name: oppObj.name,
+          logo: oppObj.logoUrl,
+          rank: oppObj.ranking,
+          score: s.opponent_score || 0
+        };
+
+        const awayTeam = s.is_home === 1 ? {
+          id: oppObj.id,
+          name: oppObj.name,
+          logo: oppObj.logoUrl,
+          rank: oppObj.ranking,
+          score: s.opponent_score || 0
+        } : {
+          id: teamObj.id,
+          name: teamObj.name,
+          logo: teamObj.logoUrl,
+          rank: teamObj.ranking,
+          score: s.team_score || 0
+        };
+
+        const odds = calculateBettingLine({
+          homeTeamName: homeTeam.name,
+          homeRank: homeTeam.rank,
+          awayTeamName: awayTeam.name,
+          awayRank: awayTeam.rank,
+          isHome: true
+        });
+
+        gamesMap.set(s.game_id, {
+          id: s.game_id,
+          seasonYear: year,
+          weekNumber: week,
+          date: s.game_date,
+          name: `${awayTeam.name} at ${homeTeam.name}`,
+          shortName: `${awayTeam.name} @ ${homeTeam.name}`,
+          status: s.status,
+          statusDetail: s.status_detail,
+          isFinal: s.status === 'STATUS_FINAL',
+          isInProgress: s.status === 'STATUS_IN_PROGRESS',
+          winnerId: null,
+          broadcast: s.broadcast || 'ESPN',
+          venue: s.venue_name || 'College Stadium',
+          odds: odds?.fullLine || odds?.spreadText || null,
+          homeTeam,
+          awayTeam
+        });
+      }
+    }
+
+    // Merge with games_cache
+    const cachedGames = await db.prepare(`
+      SELECT * FROM games_cache 
+      WHERE (season_year = 2026 OR season_year = '2026') AND week_number = ?
+      ORDER BY game_date ASC
+    `).all(week);
+
+    for (const cg of cachedGames) {
+      let fullObj = null;
+      if (cg.raw_json) {
+        try { fullObj = JSON.parse(cg.raw_json); } catch (e) {}
+      }
+
+      const existing = gamesMap.get(cg.game_id);
+      if (existing) {
+        existing.status = cg.status || existing.status;
+        existing.statusDetail = cg.status_detail || existing.statusDetail;
+        existing.isFinal = cg.status === 'STATUS_FINAL';
+        existing.isInProgress = cg.status === 'STATUS_IN_PROGRESS';
+        existing.winnerId = cg.winner_team_id || existing.winnerId;
+        if (cg.home_team_score !== null) existing.homeTeam.score = cg.home_team_score;
+        if (cg.away_team_score !== null) existing.awayTeam.score = cg.away_team_score;
+        if (fullObj?.odds) existing.odds = fullObj.odds;
+      } else {
+        const homeTeam = fullObj?.homeTeam || {
+          id: cg.home_team_id,
+          name: cg.home_team_name,
+          logo: cg.home_team_logo,
+          rank: cg.home_team_rank,
+          score: cg.home_team_score || 0
+        };
+        const awayTeam = fullObj?.awayTeam || {
+          id: cg.away_team_id,
+          name: cg.away_team_name,
+          logo: cg.away_team_logo,
+          rank: cg.away_team_rank,
+          score: cg.away_team_score || 0
+        };
+
+        gamesMap.set(cg.game_id, {
+          id: cg.game_id,
+          seasonYear: year,
+          weekNumber: week,
+          date: cg.game_date,
+          name: fullObj?.name || `${awayTeam.name} at ${homeTeam.name}`,
+          shortName: fullObj?.shortName || `${awayTeam.name} @ ${homeTeam.name}`,
+          status: cg.status,
+          statusDetail: cg.status_detail,
+          isFinal: cg.status === 'STATUS_FINAL',
+          isInProgress: cg.status === 'STATUS_IN_PROGRESS',
+          winnerId: cg.winner_team_id,
+          broadcast: cg.broadcast || 'ESPN',
+          venue: cg.venue_name || 'College Stadium',
+          odds: fullObj?.odds || null,
+          homeTeam,
+          awayTeam
+        });
+      }
+    }
+
+    // 2. Fetch all user picks for this week
+    const myPicks = await db.prepare(`
+      SELECT * FROM picks 
+      WHERE user_id = ? AND (season_year = ? OR season_year = ?) AND week_number = ?
+    `).all(req.user.id, year, String(year), week);
+
+    const myPicksMap = new Map();
+    myPicks.forEach(p => myPicksMap.set(p.game_id, p));
+
+    const buddyPicksMap = new Map();
+    if (selectedBuddy) {
+      const buddyPicks = await db.prepare(`
+        SELECT * FROM picks 
+        WHERE user_id = ? AND (season_year = ? OR season_year = ?) AND week_number = ?
+      `).all(selectedBuddy.id, year, String(year), week);
+      buddyPicks.forEach(p => buddyPicksMap.set(p.game_id, p));
+    }
+
+    const allPartyPicks = await db.prepare(`
+      SELECT p.*, u.display_name, u.avatar_url
+      FROM picks p
+      JOIN party_members pm ON p.user_id = pm.user_id
+      JOIN users u ON p.user_id = u.id
+      WHERE pm.party_id = ? AND (p.season_year = ? OR p.season_year = ?) AND p.week_number = ?
+    `).all(partyId, year, String(year), week);
+
+    const partyPicksByGame = new Map();
+    allPartyPicks.forEach(p => {
+      if (!partyPicksByGame.has(p.game_id)) {
+        partyPicksByGame.set(p.game_id, []);
+      }
+      partyPicksByGame.get(p.game_id).push(p);
+    });
+
+    // Ensure any game that has picks is in gamesMap
+    for (const p of allPartyPicks) {
+      if (!gamesMap.has(p.game_id)) {
+        const fallbackGame = await db.prepare('SELECT * FROM games_cache WHERE game_id = ?').get(p.game_id)
+          || await db.prepare('SELECT * FROM team_schedules WHERE game_id = ?').get(p.game_id);
+        if (fallbackGame) {
+          gamesMap.set(p.game_id, {
+            id: p.game_id,
+            seasonYear: year,
+            weekNumber: week,
+            date: fallbackGame.game_date,
+            name: `${fallbackGame.away_team_name || 'Away'} at ${fallbackGame.home_team_name || 'Home'}`,
+            shortName: `${fallbackGame.away_team_name || 'Away'} @ ${fallbackGame.home_team_name || 'Home'}`,
+            status: fallbackGame.status || 'STATUS_SCHEDULED',
+            statusDetail: fallbackGame.status_detail || 'Scheduled',
+            isFinal: fallbackGame.status === 'STATUS_FINAL',
+            isInProgress: fallbackGame.status === 'STATUS_IN_PROGRESS',
+            winnerId: fallbackGame.winner_team_id || null,
+            broadcast: fallbackGame.broadcast || 'ESPN',
+            venue: fallbackGame.venue_name || 'College Stadium',
+            odds: null,
+            homeTeam: {
+              id: fallbackGame.home_team_id || 'home',
+              name: fallbackGame.home_team_name || 'Home Team',
+              logo: fallbackGame.home_team_logo || 'https://a.espncdn.com/i/teamlogos/ncaa/500/7.png',
+              rank: fallbackGame.home_team_rank || null,
+              score: fallbackGame.home_team_score || 0
+            },
+            awayTeam: {
+              id: fallbackGame.away_team_id || 'away',
+              name: fallbackGame.away_team_name || 'Away Team',
+              logo: fallbackGame.away_team_logo || 'https://a.espncdn.com/i/teamlogos/ncaa/500/7.png',
+              rank: fallbackGame.away_team_rank || null,
+              score: fallbackGame.away_team_score || 0
+            }
+          });
+        }
+      }
+    }
+
+    const allWeekGames = Array.from(gamesMap.values());
+
+    // Filter games to either games that have picks by party members OR all scheduled 2026 games
+    const gamesWithPicks = allWeekGames.filter(g => {
+      return myPicksMap.has(g.id) || (selectedBuddy && buddyPicksMap.has(g.id)) || partyPicksByGame.has(g.id);
+    });
+
+    const targetGames = gamesWithPicks.length > 0 ? gamesWithPicks : allWeekGames.slice(0, 20);
+
+    let totalCompared = 0;
+    let agreedCount = 0;
+    let disagreedCount = 0;
+    let myWeeklyPoints = 0;
+    let buddyWeeklyPoints = 0;
 
     const gameComparisons = targetGames.map(g => {
       const myPick = myPicksMap.get(g.id) || null;
@@ -382,23 +499,27 @@ function arePicksAgreed(pickA, pickB, homeTeam, awayTeam) {
 
       let comparisonStatus = 'UNPICKED';
       let headToHeadResult = 'PENDING';
+      let winnerAgreed = null;
+      let ouAgreed = null;
 
       if (myPick && buddyPick) {
         totalCompared++;
-        const isAgreed = arePicksAgreed(myPick, buddyPick, g.homeTeam, g.awayTeam);
+        winnerAgreed = arePicksAgreed(myPick, buddyPick, g.homeTeam, g.awayTeam);
+        ouAgreed = areOuPicksAgreed(myPick, buddyPick);
 
-        if (isAgreed) {
+        const isOverallAgreed = winnerAgreed && (ouAgreed === null || ouAgreed === true);
+
+        if (isOverallAgreed) {
           comparisonStatus = 'AGREED';
           agreedCount++;
         } else {
           comparisonStatus = 'DISAGREED';
           disagreedCount++;
-          totalContestedGames++;
         }
 
-        if (g.isFinal && g.winnerId) {
-          const myCorrect = myPick.predicted_winner_id === g.winnerId || myPick.is_correct === 1;
-          const buddyCorrect = buddyPick.predicted_winner_id === g.winnerId || buddyPick.is_correct === 1;
+        if (g.isFinal) {
+          const myCorrect = myPick.is_correct === 1;
+          const buddyCorrect = buddyPick.is_correct === 1;
 
           if (myCorrect && buddyCorrect) {
             headToHeadResult = 'BOTH_CORRECT';
@@ -406,16 +527,8 @@ function arePicksAgreed(pickA, pickB, homeTeam, awayTeam) {
             headToHeadResult = 'BOTH_INCORRECT';
           } else if (myCorrect && !buddyCorrect) {
             headToHeadResult = 'YOU_WON';
-            if (!isAgreed) {
-              myContestedWins++;
-              myContestedPoints += (myPick.points_awarded || (myPick.confidence_points || 1) * 10);
-            }
           } else if (!myCorrect && buddyCorrect) {
             headToHeadResult = 'BUDDY_WON';
-            if (!isAgreed) {
-              buddyContestedWins++;
-              buddyContestedPoints += (buddyPick.points_awarded || (buddyPick.confidence_points || 1) * 10);
-            }
           }
         }
       } else if (myPick) {
@@ -431,21 +544,25 @@ function arePicksAgreed(pickA, pickB, homeTeam, awayTeam) {
         buddyWeeklyPoints += buddyPick.points_awarded;
       }
 
-      const homePicksCount = allPicksForGame.filter(p => {
-        return resolvePickToTeam(p, g.homeTeam, g.awayTeam) === 'HOME';
-      }).length;
-
-      const awayPicksCount = allPicksForGame.filter(p => {
-        return resolvePickToTeam(p, g.homeTeam, g.awayTeam) === 'AWAY';
-      }).length;
-
+      // Party Consensus Calculation
+      const homePicksCount = allPicksForGame.filter(p => resolvePickToTeam(p, g.homeTeam, g.awayTeam) === 'HOME').length;
+      const awayPicksCount = allPicksForGame.filter(p => resolvePickToTeam(p, g.homeTeam, g.awayTeam) === 'AWAY').length;
       const totalPartyPicks = homePicksCount + awayPicksCount;
+
+      const overPicksCount = allPicksForGame.filter(p => p.over_under_pick === 'OVER').length;
+      const underPicksCount = allPicksForGame.filter(p => p.over_under_pick === 'UNDER').length;
+      const totalOuPicks = overPicksCount + underPicksCount;
 
       const consensus = {
         totalPicks: totalPartyPicks,
+        homeCount: homePicksCount,
+        awayCount: awayPicksCount,
         homePct: totalPartyPicks > 0 ? Math.round((homePicksCount / totalPartyPicks) * 100) : 50,
         awayPct: totalPartyPicks > 0 ? Math.round((awayPicksCount / totalPartyPicks) * 100) : 50,
-        consensusTeam: homePicksCount > awayPicksCount ? g.homeTeam.name : (awayPicksCount > homePicksCount ? g.awayTeam.name : 'Split 50/50')
+        consensusTeam: homePicksCount > awayPicksCount ? g.homeTeam.name : (awayPicksCount > homePicksCount ? g.awayTeam.name : 'Split 50/50'),
+        ouTotal: totalOuPicks,
+        overPct: totalOuPicks > 0 ? Math.round((overPicksCount / totalOuPicks) * 100) : 50,
+        underPct: totalOuPicks > 0 ? Math.round((underPicksCount / totalOuPicks) * 100) : 50
       };
 
       return {
@@ -453,6 +570,8 @@ function arePicksAgreed(pickA, pickB, homeTeam, awayTeam) {
         myPick,
         buddyPick,
         comparisonStatus,
+        winnerAgreed,
+        ouAgreed,
         headToHeadResult,
         consensus,
         partyPicksCount: allPicksForGame.length,
@@ -461,14 +580,46 @@ function arePicksAgreed(pickA, pickB, homeTeam, awayTeam) {
           userName: p.display_name,
           predictedId: p.predicted_winner_id,
           predictedName: p.predicted_winner_name,
+          confidencePoints: p.confidence_points,
+          overUnderPick: p.over_under_pick,
           isCorrect: p.is_correct
         }))
       };
     });
 
+    // Sort comparisons: Contested/Split first, then Lock clashes, then Agreed, then pending
+    gameComparisons.sort((a, b) => {
+      const rank = (c) => {
+        if (c.comparisonStatus === 'DISAGREED') {
+          const isLock = (c.myPick?.confidence_level === 3) || (c.buddyPick?.confidence_level === 3);
+          return isLock ? 1 : 2;
+        }
+        if (c.comparisonStatus === 'AGREED') return 3;
+        if (c.comparisonStatus === 'MY_ONLY' || c.comparisonStatus === 'BUDDY_ONLY') return 4;
+        return 5;
+      };
+      return rank(a) - rank(b);
+    });
+
     const agreementRate = totalCompared > 0 ? Math.round((agreedCount / totalCompared) * 100) : 0;
 
-    // Fetch full season record for current user and selected buddy
+    // Full Season Record & Head-to-Head Clash Calculation across ALL weeks
+    const allSeasonPartyPicks = await db.prepare(`
+      SELECT p.*, u.display_name, u.username, u.favorite_team, u.avatar_url, u.jersey_number
+      FROM picks p
+      JOIN party_members pm ON p.user_id = pm.user_id
+      JOIN users u ON p.user_id = u.id
+      WHERE pm.party_id = ? AND (p.season_year = ? OR p.season_year = ?)
+    `).all(partyId, year, String(year));
+
+    const picksByUser = new Map();
+    allSeasonPartyPicks.forEach(p => {
+      if (!picksByUser.has(p.user_id)) picksByUser.set(p.user_id, new Map());
+      picksByUser.get(p.user_id).set(p.game_id, p);
+    });
+
+    const myAllPicks = picksByUser.get(req.user.id) || new Map();
+
     const getSeasonUserStats = async (userId) => {
       const userRec = await db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
       const userPicks = await db.prepare(`
@@ -506,7 +657,33 @@ function arePicksAgreed(pickA, pickB, homeTeam, awayTeam) {
     const mySeasonRecord = await getSeasonUserStats(req.user.id);
     const buddySeasonRecord = selectedBuddy ? await getSeasonUserStats(selectedBuddy.id) : null;
 
-    // Calculate Head-to-Head series status
+    // Season-wide Head-to-Head Clash against selectedBuddy
+    let myContestedPoints = 0;
+    let buddyContestedPoints = 0;
+    let myContestedWins = 0;
+    let buddyContestedWins = 0;
+    let totalContestedGames = 0;
+
+    if (selectedBuddy) {
+      const selectedBuddyPicks = picksByUser.get(selectedBuddy.id) || new Map();
+      for (const [gId, myP] of myAllPicks.entries()) {
+        const budP = selectedBuddyPicks.get(gId);
+        if (!budP) continue;
+
+        const isAgreed = arePicksAgreed(myP, budP);
+        if (!isAgreed) {
+          totalContestedGames++;
+          if (myP.is_correct === 1 && budP.is_correct === 0) {
+            myContestedWins++;
+            myContestedPoints += (myP.points_awarded || (myP.confidence_points || 1) * 10);
+          } else if (budP.is_correct === 1 && myP.is_correct === 0) {
+            buddyContestedWins++;
+            buddyContestedPoints += (budP.points_awarded || (budP.confidence_points || 1) * 10);
+          }
+        }
+      }
+    }
+
     let seriesLeader = 'TIED';
     if (myContestedPoints > buddyContestedPoints) seriesLeader = 'YOU_LEADING';
     else if (buddyContestedPoints > myContestedPoints) seriesLeader = 'BUDDY_LEADING';
@@ -524,37 +701,19 @@ function arePicksAgreed(pickA, pickB, homeTeam, awayTeam) {
     };
 
     // Build Party Rivalry Roster for quick switcher
-    const seasonPartyPicks = await db.prepare(`
-      SELECT p.*, u.display_name, u.username, u.favorite_team, u.avatar_url, u.jersey_number
-      FROM picks p
-      JOIN party_members pm ON p.user_id = pm.user_id
-      JOIN users u ON p.user_id = u.id
-      WHERE pm.party_id = ? AND (p.season_year = ? OR p.season_year = ?)
-    `).all(partyId, year, String(year));
-
-    const allPicksByUser = new Map();
-    seasonPartyPicks.forEach(p => {
-      if (!allPicksByUser.has(p.user_id)) allPicksByUser.set(p.user_id, new Map());
-      allPicksByUser.get(p.user_id).set(p.game_id, p);
-    });
-
-    const myAllPicksMap = allPicksByUser.get(req.user.id) || new Map();
-
     const rivalryRoster = buddies.map(b => {
-      const bPicks = allPicksByUser.get(b.id) || new Map();
+      const bPicks = picksByUser.get(b.id) || new Map();
       let h2hMyPts = 0;
       let h2hBuddyPts = 0;
       let h2hMyWins = 0;
       let h2hBuddyWins = 0;
       let h2hContested = 0;
 
-      for (const [gId, myP] of myAllPicksMap.entries()) {
+      for (const [gId, myP] of myAllPicks.entries()) {
         const budP = bPicks.get(gId);
         if (!budP) continue;
 
-        const isAgreed = (myP.predicted_winner_id && budP.predicted_winner_id && myP.predicted_winner_id === budP.predicted_winner_id)
-          || (myP.predicted_winner_name && budP.predicted_winner_name && myP.predicted_winner_name.toLowerCase() === budP.predicted_winner_name.toLowerCase());
-
+        const isAgreed = arePicksAgreed(myP, budP);
         if (!isAgreed) {
           h2hContested++;
           if (myP.is_correct === 1 && budP.is_correct === 0) {
@@ -594,18 +753,20 @@ function arePicksAgreed(pickA, pickB, homeTeam, awayTeam) {
       week,
       currentUser: {
         id: req.user.id,
-        displayName: req.user.display_name,
+        displayName: req.user.display_name || req.user.username,
         avatarUrl: req.user.avatar_url,
         favoriteTeam: req.user.favorite_team,
+        jerseyNumber: req.user.jersey_number,
         weeklyPoints: myWeeklyPoints,
         seasonRecord: mySeasonRecord
       },
       buddies,
       selectedBuddy: selectedBuddy ? {
         id: selectedBuddy.id,
-        displayName: selectedBuddy.display_name,
+        displayName: selectedBuddy.display_name || selectedBuddy.username,
         avatarUrl: selectedBuddy.avatar_url,
         favoriteTeam: selectedBuddy.favorite_team,
+        jerseyNumber: selectedBuddy.jersey_number,
         weeklyPoints: buddyWeeklyPoints,
         seasonRecord: buddySeasonRecord
       } : null,
