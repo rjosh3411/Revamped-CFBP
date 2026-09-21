@@ -245,32 +245,44 @@ class GradingService {
   /**
    * Syncs latest ESPN live scoreboard and completed weeks, automatically grading all completed games.
    */
-  async syncAndGradeLiveScores() {
+  async syncAndGradeLiveScores(force = false) {
+    const now = Date.now();
+    if (!force && this._lastSyncTime && (now - this._lastSyncTime < 60000)) {
+      return { gradedCount: 0, cached: true };
+    }
+    this._lastSyncTime = now;
+
     try {
       const espnService = require('./espnService');
       const weeksToSync = [0, 1, 2, 3];
-      let allGames = [];
-
-      for (const w of weeksToSync) {
+      const fetchPromises = weeksToSync.map(async (w) => {
         try {
           const url = `https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?dates=2026&seasontype=2&week=${w}&groups=80&limit=150`;
           const data = await espnService.fetchJson(url);
           if (data && data.events && Array.isArray(data.events)) {
-            const normalized = espnService.normalizeScoreboard(data, 2026, w);
-            allGames.push(...normalized);
+            return espnService.normalizeScoreboard(data, 2026, w);
           }
-        } catch (e) {
-          // non-blocking
+        } catch (e) {}
+        return [];
+      });
+
+      const livePromise = (async () => {
+        try {
+          const live = await espnService.getLiveScoreboard();
+          if (live && live.games && live.games.length > 0) {
+            return live.games;
+          }
+        } catch (e) {}
+        return [];
+      })();
+
+      const results = await Promise.allSettled([...fetchPromises, livePromise]);
+      let allGames = [];
+      for (const res of results) {
+        if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+          allGames.push(...res.value);
         }
       }
-
-      // Also fetch live scoreboard for real-time in-progress games
-      try {
-        const live = await espnService.getLiveScoreboard();
-        if (live && live.games && live.games.length > 0) {
-          allGames.push(...live.games);
-        }
-      } catch (e) {}
 
       if (allGames.length > 0) {
         await espnService.saveGamesToDb(allGames, 2026, 2);

@@ -507,14 +507,15 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
         winnerAgreed = arePicksAgreed(myPick, buddyPick, g.homeTeam, g.awayTeam);
         ouAgreed = areOuPicksAgreed(myPick, buddyPick);
 
-        const isOverallAgreed = winnerAgreed && (ouAgreed === null || ouAgreed === true);
-
-        if (isOverallAgreed) {
-          comparisonStatus = 'AGREED';
-          agreedCount++;
-        } else {
-          comparisonStatus = 'DISAGREED';
+        if (!winnerAgreed) {
+          comparisonStatus = 'DISAGREED'; // Outright winner divergence
           disagreedCount++;
+        } else if (ouAgreed === false) {
+          comparisonStatus = 'OU_SPLIT'; // Agreed on winner, split on Over/Under
+          disagreedCount++;
+        } else {
+          comparisonStatus = 'AGREED'; // Full consensus
+          agreedCount++;
         }
 
         if (g.isFinal) {
@@ -587,20 +588,27 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
       };
     });
 
-    // Sort comparisons: Contested/Split first, then Lock clashes, then Agreed, then pending
+    // Sort comparisons: Winner splits first, then O/U splits, then lock clashes, then agreed, then pending
     gameComparisons.sort((a, b) => {
       const rank = (c) => {
+        const isLock = (c.myPick?.confidence_level === 3 || c.myPick?.confidence_points === 3) ||
+                       (c.buddyPick?.confidence_level === 3 || c.buddyPick?.confidence_points === 3);
         if (c.comparisonStatus === 'DISAGREED') {
-          const isLock = (c.myPick?.confidence_level === 3) || (c.buddyPick?.confidence_level === 3);
           return isLock ? 1 : 2;
         }
-        if (c.comparisonStatus === 'AGREED') return 3;
-        if (c.comparisonStatus === 'MY_ONLY' || c.comparisonStatus === 'BUDDY_ONLY') return 4;
-        return 5;
+        if (c.comparisonStatus === 'OU_SPLIT') {
+          return isLock ? 3 : 4;
+        }
+        if (c.comparisonStatus === 'AGREED') return 5;
+        if (c.comparisonStatus === 'MY_ONLY' || c.comparisonStatus === 'BUDDY_ONLY') return 6;
+        return 7;
       };
       return rank(a) - rank(b);
     });
 
+    const winnerSplitCount = gameComparisons.filter(c => c.comparisonStatus === 'DISAGREED').length;
+    const ouSplitCount = gameComparisons.filter(c => c.comparisonStatus === 'OU_SPLIT').length;
+    const totalSplitCount = winnerSplitCount + ouSplitCount;
     const agreementRate = totalCompared > 0 ? Math.round((agreedCount / totalCompared) * 100) : 0;
 
     // Full Season Record & Head-to-Head Clash Calculation across ALL weeks
@@ -774,7 +782,10 @@ router.get('/party/:partyId', authenticateToken, async (req, res) => {
         totalGames: targetGames.length,
         totalCompared,
         agreedCount,
-        disagreedCount,
+        disagreedCount: totalSplitCount,
+        winnerSplitCount,
+        ouSplitCount,
+        totalSplitCount,
         agreementRate,
         myWeeklyPoints,
         buddyWeeklyPoints,

@@ -192,7 +192,9 @@ export function BuddyComparison({ parties = [], currentWeek: initialWeek, curren
 
   // Filter comparisons
   const filteredComparisons = comparisons.filter(c => {
-    if (filterMode === 'DISAGREED') return c.comparisonStatus === 'DISAGREED' || c.comparisonStatus === 'OU_SPLIT';
+    if (filterMode === 'WINNER_SPLIT') return c.comparisonStatus === 'DISAGREED';
+    if (filterMode === 'OU_SPLIT') return c.comparisonStatus === 'OU_SPLIT';
+    if (filterMode === 'ALL_SPLITS' || filterMode === 'DISAGREED') return c.comparisonStatus === 'DISAGREED' || c.comparisonStatus === 'OU_SPLIT';
     if (filterMode === 'AGREED') return c.comparisonStatus === 'AGREED';
     if (filterMode === 'LOCKS') {
       const isLock = (c.myPick?.confidence_level === 3 || c.myPick?.confidence_points === 3) ||
@@ -541,7 +543,7 @@ export function BuddyComparison({ parties = [], currentWeek: initialWeek, curren
         <>
           {/* Filter & View Mode Tabs */}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center space-x-1.5 bg-black/60 p-1.5 rounded-2xl border border-white/10 shadow-inner overflow-x-auto">
+            <div className="flex items-center space-x-1.5 bg-black/60 p-1.5 rounded-2xl border border-white/10 shadow-inner overflow-x-auto scrollbar-none">
               <button
                 onClick={() => setFilterMode('ALL')}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer whitespace-nowrap ${
@@ -552,17 +554,47 @@ export function BuddyComparison({ parties = [], currentWeek: initialWeek, curren
               >
                 All Matchups ({comparisons.length})
               </button>
+
+              {winnerSplitCount > 0 && (
+                <button
+                  onClick={() => setFilterMode('WINNER_SPLIT')}
+                  className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer whitespace-nowrap ${
+                    filterMode === 'WINNER_SPLIT'
+                      ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
+                      : 'text-orange-400 hover:bg-white/5'
+                  }`}
+                >
+                  <Swords className="w-3.5 h-3.5 mr-1" />
+                  <span>Winner Splits ({winnerSplitCount})</span>
+                </button>
+              )}
+
+              {ouSplitCount > 0 && (
+                <button
+                  onClick={() => setFilterMode('OU_SPLIT')}
+                  className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer whitespace-nowrap ${
+                    filterMode === 'OU_SPLIT'
+                      ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
+                      : 'text-indigo-300 hover:bg-white/5'
+                  }`}
+                >
+                  <span className="mr-1">⚖️</span>
+                  <span>O/U Splits ({ouSplitCount})</span>
+                </button>
+              )}
+
               <button
-                onClick={() => setFilterMode('DISAGREED')}
+                onClick={() => setFilterMode('ALL_SPLITS')}
                 className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer whitespace-nowrap ${
-                  filterMode === 'DISAGREED'
-                    ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
-                    : 'text-orange-400 hover:bg-white/5'
+                  filterMode === 'ALL_SPLITS'
+                    ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20'
+                    : 'text-rose-400 hover:bg-white/5'
                 }`}
               >
-                <Swords className="w-3.5 h-3.5 mr-1" />
-                <span>Split Rivalry ({totalSplitCount})</span>
+                <Flame className="w-3.5 h-3.5 mr-1" />
+                <span>All Splits ({totalSplitCount})</span>
               </button>
+
               <button
                 onClick={() => setFilterMode('AGREED')}
                 className={`flex items-center space-x-1 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer whitespace-nowrap ${
@@ -574,6 +606,7 @@ export function BuddyComparison({ parties = [], currentWeek: initialWeek, curren
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
                 <span>Agreed Consensus ({agreedCount})</span>
               </button>
+
               {lockClashes.length > 0 && (
                 <button
                   onClick={() => setFilterMode('LOCKS')}
@@ -587,6 +620,7 @@ export function BuddyComparison({ parties = [], currentWeek: initialWeek, curren
                   <span>Lock Clashes ({lockClashes.length})</span>
                 </button>
               )}
+
               {pendingCount > 0 && (
                 <button
                   onClick={() => setFilterMode('PENDING')}
@@ -597,7 +631,7 @@ export function BuddyComparison({ parties = [], currentWeek: initialWeek, curren
                   }`}
                 >
                   <Clock className="w-3.5 h-3.5 mr-1" />
-                  <span>Awaiting Picks ({pendingCount})</span>
+                  <span>Awaiting ({pendingCount})</span>
                 </button>
               )}
             </div>
@@ -618,7 +652,7 @@ export function BuddyComparison({ parties = [], currentWeek: initialWeek, curren
               <Shield className="w-12 h-12 text-white/20 mx-auto mb-3" />
               <h3 className="text-lg font-bold text-white mb-1">No matchups found for this filter</h3>
               <p className="text-sm text-white/40 max-w-md mx-auto">
-                {filterMode === 'DISAGREED' ? 'You and your buddy made matching predictions on all games!' : 'Submit your predictions in Make Picks to compare results!'}
+                {filterMode === 'WINNER_SPLIT' || filterMode === 'ALL_SPLITS' ? 'You and your buddy made matching winner predictions on all games this week!' : 'Submit your predictions in Make Picks to compare results!'}
               </p>
             </div>
           ) : (
@@ -638,9 +672,9 @@ export function BuddyComparison({ parties = [], currentWeek: initialWeek, curren
                     key={g.id}
                     className={`rounded-2xl p-4 sm:p-5 border transition-all duration-200 ${
                       isWinnerSplit
-                        ? 'bg-gradient-to-br from-[#140e08] via-[#0e1218] to-[#140808] border-orange-500/40 shadow-xl'
+                        ? 'bg-gradient-to-br from-[#180e08] via-[#0e1218] to-[#1a0909] border-orange-500/50 shadow-xl ring-1 ring-orange-500/20'
                         : isOuSplit
-                          ? 'bg-gradient-to-br from-[#100e18] via-[#0e1218] to-[#0c0d18] border-indigo-500/40 shadow-xl'
+                          ? 'bg-gradient-to-br from-[#120e1a] via-[#0e1218] to-[#0c0e1e] border-indigo-500/50 shadow-xl ring-1 ring-indigo-500/20'
                           : isAgreed
                             ? 'bg-gradient-to-br from-[#0a120c] via-[#0e1218] to-[#0a120c] border-emerald-500/30 shadow-lg'
                             : 'bg-[#0e1218] border-white/10 shadow-lg'
@@ -685,40 +719,69 @@ export function BuddyComparison({ parties = [], currentWeek: initialWeek, curren
                       {/* Status / Agreement Badge */}
                       <div className="flex items-center space-x-2 flex-wrap gap-1">
                         {isWinnerSplit && (
-                          <span className="px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30 text-[10px] font-black uppercase flex items-center space-x-1">
-                            <Swords className="w-3 h-3" />
+                          <span className="px-2.5 py-1 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/40 text-[10px] font-black uppercase flex items-center space-x-1 shadow-sm">
+                            <Swords className="w-3 h-3 text-orange-400" />
                             <span>Winner Split Rivalry</span>
                           </span>
                         )}
                         {isOuSplit && (
-                          <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-black uppercase flex items-center space-x-1">
+                          <span className="px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-black uppercase flex items-center space-x-1 shadow-sm">
                             <span>⚖️ O/U Split • Agreed Winner</span>
                           </span>
                         )}
                         {isAgreed && (
-                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase flex items-center space-x-1">
-                            <CheckCircle2 className="w-3 h-3" />
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase flex items-center space-x-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
                             <span>Agreed Consensus</span>
                           </span>
                         )}
                         {isMyOnly && (
-                          <span className="px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-black uppercase flex items-center space-x-1">
+                          <span className="px-2.5 py-1 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-black uppercase flex items-center space-x-1">
                             <Clock className="w-3 h-3" />
                             <span>Awaiting Rival Pick</span>
                           </span>
                         )}
                         {isBuddyOnly && (
-                          <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-black uppercase flex items-center space-x-1">
+                          <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-black uppercase flex items-center space-x-1">
                             <Clock className="w-3 h-3" />
                             <span>Awaiting Your Pick</span>
                           </span>
                         )}
 
-                        <span className="text-[10px] text-white/40 font-medium">
+                        <span className="text-[10px] text-white/40 font-medium ml-1">
                           {typeof g.odds === 'object' ? (g.odds?.fullLine || g.odds?.spreadText || g.broadcast || '2026 Matchup') : (g.odds || g.broadcast || '2026 Matchup')}
                         </span>
                       </div>
                     </div>
+
+                    {/* Prominent Split Difference Banner */}
+                    {isWinnerSplit && myPick && buddyPick && (
+                      <div className="mt-2.5 px-3.5 py-2 rounded-xl bg-orange-500/15 border border-orange-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs font-bold text-orange-200">
+                        <div className="flex items-center space-x-2">
+                          <Swords className="w-4 h-4 text-orange-400 shrink-0" />
+                          <span>
+                            Rivalry Split: You picked <strong className="text-white underline decoration-amber-400">{myPick.predicted_winner_name}</strong> vs {buddyName} picked <strong className="text-white underline decoration-indigo-400">{buddyPick.predicted_winner_name}</strong>
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono uppercase bg-black/40 px-2 py-0.5 rounded text-amber-300 border border-orange-500/30 shrink-0">
+                          {Math.abs((myPick.confidence_points || 1) * 10 - (buddyPick.confidence_points || 1) * 10)} PTS Swing
+                        </span>
+                      </div>
+                    )}
+
+                    {isOuSplit && myPick && buddyPick && (
+                      <div className="mt-2.5 px-3.5 py-2 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs font-bold text-indigo-200">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm">⚖️</span>
+                          <span>
+                            O/U Split: Both agreed on <strong className="text-white">{myPick.predicted_winner_name}</strong> • You: <strong className="text-amber-300">{myPick.over_under_pick} {myPick.over_under_line || ''}</strong> vs {buddyName}: <strong className="text-indigo-300">{buddyPick.over_under_pick} {buddyPick.over_under_line || ''}</strong>
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono uppercase bg-black/40 px-2 py-0.5 rounded text-indigo-300 border border-indigo-500/30 shrink-0">
+                          10 PTS Bonus Split
+                        </span>
+                      </div>
+                    )}
 
                     {/* Head-to-Head Comparison Boxes */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3">

@@ -18,5 +18,4 @@ module.exports = (req, res) => {
   }
   return app(req, res);
 };
-// Vercel redeploy Fri Sep 18 16:20:00 EDT 2026 - Enhanced split & agreed picks with canonical team resolution and O/U breakdown
-
+// Vercel redeploy Sun Sep 20 21:11:00 EDT 2026 - Fixed distinct Winner Splits, O/U Splits, and detailed divergence banners

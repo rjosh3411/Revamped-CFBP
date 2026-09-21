@@ -91,7 +91,7 @@ class EspnService {
 
   async fetchJson(url) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
+    const timeout = setTimeout(() => controller.abort(), 3000);
     try {
       const res = await fetch(url, {
         headers: {
@@ -607,10 +607,27 @@ class EspnService {
           last_synced = CURRENT_TIMESTAMP
       `,
       args: [
-        g.id, year, (g.weekNumber !== undefined && g.weekNumber !== null ? g.weekNumber : (week || 1)), g.date, g.status, g.statusDetail,
-        g.homeTeam.id, g.homeTeam.name, g.homeTeam.rank, g.homeTeam.logo, g.homeTeam.score,
-        g.awayTeam.id, g.awayTeam.name, g.awayTeam.rank, g.awayTeam.logo, g.awayTeam.score,
-        g.winnerId, g.conferenceCompetition ? 1 : 0, g.venue, g.broadcast, JSON.stringify(g)
+        g.id || ('gm_' + Math.random().toString(36).slice(2)),
+        year || 2026,
+        (g.weekNumber !== undefined && g.weekNumber !== null ? g.weekNumber : (week || 1)),
+        g.date || null,
+        g.status || 'STATUS_SCHEDULED',
+        g.statusDetail || 'Scheduled',
+        g.homeTeam?.id || null,
+        g.homeTeam?.name || 'Home Team',
+        (g.homeTeam?.rank !== undefined && g.homeTeam?.rank !== null) ? g.homeTeam.rank : null,
+        g.homeTeam?.logo || null,
+        (g.homeTeam?.score !== undefined && g.homeTeam?.score !== null) ? g.homeTeam.score : null,
+        g.awayTeam?.id || null,
+        g.awayTeam?.name || 'Away Team',
+        (g.awayTeam?.rank !== undefined && g.awayTeam?.rank !== null) ? g.awayTeam.rank : null,
+        g.awayTeam?.logo || null,
+        (g.awayTeam?.score !== undefined && g.awayTeam?.score !== null) ? g.awayTeam.score : null,
+        g.winnerId || null,
+        g.conferenceCompetition ? 1 : 0,
+        g.venue || null,
+        g.broadcast || null,
+        JSON.stringify(g)
       ]
     }));
 
